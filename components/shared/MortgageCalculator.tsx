@@ -3,197 +3,172 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
+const frequencies = ['Monthly', 'Semi-monthly', 'Bi-weekly', 'Weekly'] as const
+
+function getCmhcRate(pct: number) {
+    if (pct >= 20) return 0
+    if (pct >= 15) return 0.028
+    if (pct >= 10) return 0.031
+    return 0.04
+}
+
+function getPeriodsPerYear(freq: string) {
+    if (freq === 'Semi-monthly') return 24
+    if (freq === 'Bi-weekly') return 26
+    if (freq === 'Weekly') return 52
+    return 12
+}
+
+function formatInput(val: string) {
+    const num = parseInt(val.replace(/[^0-9]/g, '')) || 0
+    return num > 0 ? num.toLocaleString('en-CA') : ''
+}
+
+function parseInput(val: string) {
+    return parseInt(val.replace(/[^0-9]/g, '')) || 0
+}
+
 export function MortgageCalculator() {
-    const [purchasePrice, setPurchasePrice] = useState(800000)
-    const [downPaymentPercent, setDownPaymentPercent] = useState(20)
-    const [downPaymentAmount, setDownPaymentAmount] = useState(160000)
-    const [interestRate, setInterestRate] = useState(5.5)
-    const [amortization, setAmortization] = useState(25)
-    const [frequency, setFrequency] = useState('Monthly')
+    const [priceInput, setPriceInput] = useState('500,000')
+    const [dpInput, setDpInput] = useState('25,000')
+    const [rate, setRate] = useState('4.99')
+    const [amort, setAmort] = useState(25)
+    const [freq, setFreq] = useState<string>('Monthly')
+    const [payment, setPayment] = useState(0)
 
-    const [estimatedPayment, setEstimatedPayment] = useState(0)
-    const [totalInterest, setTotalInterest] = useState(0)
-    const [totalCost, setTotalCost] = useState(0)
+    const price = parseInput(priceInput)
+    const dp = parseInput(dpInput)
+    const dpPercent = price > 0 ? (dp / price) * 100 : 0
+    const needsInsurance = dpPercent < 20 && price < 1500000 && price > 0
 
-    // Update amounts when percentage changes
     useEffect(() => {
-        const amount = (purchasePrice * downPaymentPercent) / 100
-        if (amount !== downPaymentAmount) {
-            setDownPaymentAmount(amount)
-        }
-    }, [purchasePrice, downPaymentPercent])
+        const principal = price - dp
+        if (principal <= 0) { setPayment(0); return }
 
-    // Calculate mortgage
-    useEffect(() => {
-        const principal = purchasePrice - downPaymentAmount
-        if (principal <= 0) {
-            setEstimatedPayment(0)
-            setTotalInterest(0)
-            setTotalCost(purchasePrice)
-            return
-        }
+        const cmhc = needsInsurance ? principal * getCmhcRate(dpPercent) : 0
+        const mortgage = principal + cmhc
 
-        // Standard Canadian mortgage formula (semi-annual compounding)
-        const annualRate = interestRate / 100
-        const semiAnnualRate = annualRate / 2
-        const effectiveAnnualRate = Math.pow(1 + semiAnnualRate, 2) - 1
+        const annualRate = (parseFloat(rate) || 0) / 100
+        const semiAnnual = annualRate / 2
+        const effectiveAnnual = Math.pow(1 + semiAnnual, 2) - 1
+        const periods = getPeriodsPerYear(freq)
+        const periodRate = Math.pow(1 + effectiveAnnual, 1 / periods) - 1
+        const totalPeriods = amort * periods
 
-        let periodsPerYear = 12
-        if (frequency === 'Bi-weekly') periodsPerYear = 26
-        if (frequency === 'Weekly') periodsPerYear = 52
+        if (periodRate === 0) { setPayment(mortgage / totalPeriods); return }
 
-        // Effective rate per payment period
-        const effectiveRate = Math.pow(1 + effectiveAnnualRate, 1 / periodsPerYear) - 1
-        const totalPeriods = amortization * periodsPerYear
+        setPayment((mortgage * periodRate) / (1 - Math.pow(1 + periodRate, -totalPeriods)))
+    }, [price, dp, dpPercent, rate, amort, freq, needsInsurance])
 
-        if (effectiveRate === 0) {
-            const payment = principal / totalPeriods
-            setEstimatedPayment(payment)
-            setTotalInterest(0)
-            setTotalCost(purchasePrice)
-            return
-        }
+    const formatCurrency = (n: number) =>
+        new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 2 }).format(n)
 
-        const payment = (principal * effectiveRate) / (1 - Math.pow(1 + effectiveRate, -totalPeriods))
-        const totalInt = (payment * totalPeriods) - principal
-
-        setEstimatedPayment(payment)
-        setTotalInterest(totalInt)
-        setTotalCost(purchasePrice + totalInt)
-
-    }, [purchasePrice, downPaymentAmount, interestRate, amortization, frequency])
-
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(val)
-    }
+    const inputClass = "w-full border border-brand-border px-4 py-3 bg-brand-bg focus:outline-none focus:border-brand-accent transition-colors text-brand-text rounded-sm"
 
     return (
-        <div className="bg-white border border-brand-border shadow-xl p-6 md:p-10 rounded-sm">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-12">
-                {/* Controls */}
-                <div className="lg:col-span-3 space-y-8">
-                    <div>
-                        <div className="flex justify-between mb-2">
-                            <label htmlFor="purchasePrice" className="text-sm font-semibold uppercase tracking-wider text-brand-text">Purchase Price</label>
-                            <span className="font-medium text-brand-accent">{formatCurrency(purchasePrice)}</span>
+        <div className="bg-white border border-brand-border shadow-xl rounded-sm overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-5">
+                {/* Inputs */}
+                <div className="lg:col-span-3 p-8 md:p-10 space-y-5">
+                    {/* Purchase Price & Down Payment side by side */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label htmlFor="price" className="block text-xs font-semibold uppercase tracking-wider text-brand-text mb-1.5">
+                                Purchase Price
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-muted">$</span>
+                                <input id="price" type="text" inputMode="numeric" value={priceInput}
+                                    onChange={(e) => setPriceInput(formatInput(e.target.value))}
+                                    className={`${inputClass} pl-8`} />
+                            </div>
                         </div>
-                        <input
-                            id="purchasePrice"
-                            type="range"
-                            min="100000"
-                            max="3000000"
-                            step="10000"
-                            value={purchasePrice}
-                            onChange={(e) => setPurchasePrice(Number(e.target.value))}
-                            className="w-full accent-brand-accent"
-                        />
-                    </div>
-
-                    <div>
-                        <div className="flex justify-between mb-2">
-                            <label htmlFor="downPayment" className="text-sm font-semibold uppercase tracking-wider text-brand-text">Down Payment ({downPaymentPercent}%)</label>
-                            <span className="font-medium text-brand-accent">{formatCurrency(downPaymentAmount)}</span>
-                        </div>
-                        <div className="flex gap-4">
-                            <input
-                                id="downPayment"
-                                type="range"
-                                min="5"
-                                max="100"
-                                step="1"
-                                value={downPaymentPercent}
-                                onChange={(e) => setDownPaymentPercent(Number(e.target.value))}
-                                className="w-full accent-brand-accent"
-                            />
+                        <div>
+                            <label htmlFor="dp" className="block text-xs font-semibold uppercase tracking-wider text-brand-text mb-1.5">
+                                Down Payment
+                            </label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-muted">$</span>
+                                <input id="dp" type="text" inputMode="numeric" value={dpInput}
+                                    onChange={(e) => setDpInput(formatInput(e.target.value))}
+                                    className={`${inputClass} pl-8`} />
+                            </div>
+                            <p className="text-xs text-brand-text-muted mt-1 font-light">
+                                {dpPercent.toFixed(0)}% of purchase price
+                                {needsInsurance && <span> · CMHC insurance applies</span>}
+                            </p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Rate & Amortization */}
+                    <div className="grid grid-cols-2 gap-5">
                         <div>
-                            <label htmlFor="interestRate" className="block text-sm font-semibold uppercase tracking-wider text-brand-text mb-2">Interest Rate (%)</label>
-                            <input
-                                id="interestRate"
-                                type="number"
-                                step="0.1"
-                                min="0.1"
-                                value={interestRate}
-                                onChange={(e) => setInterestRate(Number(e.target.value))}
-                                className="w-full border border-brand-border px-4 py-3 bg-brand-bg focus:outline-none focus:border-brand-accent transition-colors text-brand-text"
-                            />
+                            <label htmlFor="rate" className="block text-xs font-semibold uppercase tracking-wider text-brand-text mb-1.5">
+                                Interest Rate
+                            </label>
+                            <div className="relative">
+                                <input id="rate" type="text" inputMode="decimal" value={rate}
+                                    onChange={(e) => setRate(e.target.value.replace(/[^0-9.]/g, ''))}
+                                    className={inputClass} />
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-text-muted">%</span>
+                            </div>
                         </div>
-
                         <div>
-                            <label htmlFor="amortization" className="block text-sm font-semibold uppercase tracking-wider text-brand-text mb-2">Amortization</label>
-                            <select
-                                id="amortization"
-                                value={amortization}
-                                onChange={(e) => setAmortization(Number(e.target.value))}
-                                className="w-full border border-brand-border px-4 py-3 bg-brand-bg focus:outline-none focus:border-brand-accent transition-colors text-brand-text"
-                            >
-                                {[10, 15, 20, 25, 30].map(years => (
-                                    <option key={years} value={years}>{years} Years</option>
+                            <label htmlFor="amort" className="block text-xs font-semibold uppercase tracking-wider text-brand-text mb-1.5">
+                                Amortization
+                            </label>
+                            <select id="amort" value={amort} onChange={(e) => setAmort(Number(e.target.value))} className={inputClass}>
+                                {[10, 15, 20, 25, 30].map(y => (
+                                    <option key={y} value={y}>{y} Years</option>
                                 ))}
                             </select>
                         </div>
+                    </div>
 
-                        <div>
-                            <label htmlFor="frequency" className="block text-sm font-semibold uppercase tracking-wider text-brand-text mb-2">Frequency</label>
-                            <select
-                                id="frequency"
-                                value={frequency}
-                                onChange={(e) => setFrequency(e.target.value)}
-                                className="w-full border border-brand-border px-4 py-3 bg-brand-bg focus:outline-none focus:border-brand-accent transition-colors text-brand-text"
-                            >
-                                {['Monthly', 'Bi-weekly', 'Weekly'].map(freq => (
-                                    <option key={freq} value={freq}>{freq}</option>
-                                ))}
-                            </select>
+                    {/* Payment Frequency — pill selector */}
+                    <div>
+                        <span className="block text-xs font-semibold uppercase tracking-wider text-brand-text mb-2">Payment Frequency</span>
+                        <div className="flex flex-wrap gap-2">
+                            {frequencies.map(f => (
+                                <button key={f} onClick={() => setFreq(f)}
+                                    className={`px-4 py-2 text-xs font-medium uppercase tracking-wider rounded-sm transition-colors ${freq === f
+                                        ? 'bg-brand-bg-dark text-white'
+                                        : 'bg-brand-bg text-brand-text-muted border border-brand-border hover:border-brand-accent/40'
+                                    }`}>
+                                    {f}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                {/* Results */}
-                <div className="lg:col-span-2 bg-brand-bg-dark text-white p-8 flex flex-col justify-center rounded-sm">
-                    <h3 className="font-display text-2xl mb-8 border-b border-brand-border/20 pb-4">Estimated {frequency} Payment</h3>
-
-                    <div className="text-5xl font-display text-brand-gold mb-8">
-                        {formatCurrency(estimatedPayment)}
+                {/* Result */}
+                <div className="lg:col-span-2 bg-brand-bg-dark text-white p-8 md:p-10 flex flex-col justify-center items-center text-center">
+                    <p className="text-xs uppercase tracking-widest text-brand-border/60 font-semibold mb-3">
+                        Estimated {freq.toLowerCase()} payment
+                    </p>
+                    <div className="text-5xl md:text-6xl font-display text-brand-gold mb-3">
+                        {formatCurrency(payment)}
                     </div>
+                    <p className="text-xs text-brand-border/50 font-light mb-10 max-w-[260px]">
+                        Based on a {amort}-year amortization at {rate}%
+                    </p>
 
-                    <div className="space-y-4 text-sm text-brand-border/80">
-                        <div className="flex justify-between">
-                            <span>Principal Amount:</span>
-                            <span className="text-white font-medium">{formatCurrency(purchasePrice - downPaymentAmount)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span>Total Interest Paid:</span>
-                            <span className="text-white font-medium">{formatCurrency(totalInterest)}</span>
-                        </div>
-                        <div className="flex justify-between border-t border-brand-border/20 pt-4 mt-2">
-                            <span>Total Cost of Mortgage:</span>
-                            <span className="text-white font-medium text-base">{formatCurrency(totalCost)}</span>
-                        </div>
-                    </div>
-
-                    <div className="mt-10 flex flex-col gap-4">
-                        <Link
-                            href="/contact"
-                            className="block text-center bg-brand-accent hover:bg-brand-accent-light text-white font-medium px-6 py-4 uppercase tracking-wide text-xs transition-colors"
-                        >
+                    <div className="w-full flex flex-col gap-3">
+                        <Link href="/contact"
+                            className="block text-center bg-brand-accent hover:bg-brand-accent-light text-white font-medium px-6 py-4 uppercase tracking-wide text-xs transition-colors">
                             Talk to Abdul About This →
                         </Link>
-                        <Link
-                            href="/listings"
-                            className="block text-center border border-brand-border/30 hover:bg-brand-border/10 text-white font-medium px-6 py-4 uppercase tracking-wide text-xs transition-colors"
-                        >
+                        <Link href="/listings"
+                            className="block text-center border border-brand-border/30 hover:bg-brand-border/10 text-white font-medium px-6 py-4 uppercase tracking-wide text-xs transition-colors">
                             Search Listings in This Budget →
                         </Link>
                     </div>
                 </div>
             </div>
 
-            <p className="text-xs text-brand-text-muted mt-8 text-center max-w-3xl mx-auto">
-                This calculator is for estimation purposes only and uses the standard Canadian mortgage formula with semi-annual compounding. Your actual rate and payment will depend on your lender and financial situation.
+            <p className="text-xs text-brand-text-muted px-8 py-4 text-center font-light">
+                For estimation purposes only. Uses standard Canadian semi-annual compounding. Consult a mortgage broker for accurate qualification.
             </p>
         </div>
     )

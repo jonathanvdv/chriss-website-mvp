@@ -26,7 +26,7 @@ export function HeroSection() {
 
                                 <div className="text-brand-text-muted text-[13px] sm:text-sm lg:text-xl lg:max-w-none leading-relaxed font-light text-pretty space-y-4 lg:space-y-8">
                                     <p>
-                                        I'm Abdul Basharmal, a REALTOR® with RE/MAX Twin City. Born and raised in the Waterloo Region, I bring deep local knowledge of the neighborhoods, schools, and market trends to help you succeed.
+                                        I'm Abdul Basharmal, a REALTOR® with RE/MAX Twin City. Born and raised in the Waterloo Region, I bring deep local knowledge of the neighbourhoods, schools, and market trends to help you succeed.
                                     </p>
                                     <p className="hidden lg:block">
                                         Buying, selling, or renting — I'm here to guide you with clear advice and hands-on expertise every step of the way. Let's connect and talk about your goals.
@@ -68,7 +68,7 @@ export function HeroSection() {
                         {/* Checkmark Features */}
                         <div className="flex justify-center sm:justify-start lg:justify-start text-[9px] sm:text-[10px] lg:text-xs font-medium text-brand-text-muted uppercase tracking-wider mb-0 lg:mb-0">
                             <span className="flex items-center gap-1.5 lg:gap-3">
-                                <span className="text-brand-accent">✓</span> English · Hindi · Persian · Urdu · Dari · Farsi
+                                <span className="text-brand-accent">✓</span> English · Farsi · Dari · Persian · Hindi · Urdu
                             </span>
                         </div>
                     </div>

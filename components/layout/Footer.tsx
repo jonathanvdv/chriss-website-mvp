@@ -12,7 +12,7 @@ export function Footer() {
             <h2 className="font-display text-3xl mb-1 text-white">Abdul Basharmal</h2>
             <p className="text-brand-text-muted text-sm tracking-widest uppercase mb-6">REALTOR®</p>
             <p className="text-brand-border/80 text-sm italic">
-              Serving Kitchener, Waterloo & Cambridge
+              Serving Kitchener, Waterloo, Cambridge, Breslau & the Greater Toronto Area
             </p>
             <div className="mt-6 flex gap-4">
               {/* TODO: Update with real social links */}

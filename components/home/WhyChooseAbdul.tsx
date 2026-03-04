@@ -12,11 +12,11 @@ export function WhyChooseAbdul() {
         {
             icon: MessageCircle,
             title: "He Speaks Your Language - Literally",
-            description: "I serve clients in English, Hindi, Persian, Urdu, Dari, and Farsi. For many families in our community, being able to navigate a mortgage, an offer, or a closing in your own language isn't just convenient, it's essential."
+            description: "I serve clients in English, Farsi, Dari, Persian, Hindi, and Urdu. For many families in our community, being able to navigate a mortgage, an offer, or a closing in your own language isn't just convenient, it's essential."
         },
         {
             icon: ShieldCheck,
-            title: "He'll Tell You the Truth",
+            title: "He'll Tell You The Truth",
             description: "If a house is overpriced, I'll tell you. If it's a great deal, I'll tell you that too. I'd rather give you honest advice that builds a long-term relationship than tell you what you want to hear for a quick commission."
         },
         {

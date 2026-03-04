@@ -21,7 +21,7 @@ export default function AboutPage() {
                     fill
                     priority
                     sizes="100vw"
-                    className="object-contain object-bottom"
+                    className="object-contain object-bottom saturate-[1.15]"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-brand-bg-dark/80 via-brand-bg-dark/40 to-transparent"></div>
 
@@ -39,7 +39,7 @@ export default function AboutPage() {
                 <div className="text-center mb-16">
                     <p className="text-brand-accent text-xs font-semibold uppercase tracking-widest mb-6">My Story</p>
                     <h2 className="font-display text-4xl md:text-5xl text-brand-text mb-10 leading-tight">
-                        I Got Into Real Estate Because I Wanted to Actually <span className="italic text-brand-accent">Help People</span>
+                        I Don't Just Sell Homes — I Help Families <span className="italic text-brand-accent">Move Forward</span>
                     </h2>
                 </div>
 

@@ -28,7 +28,7 @@ export function AboutPreview() {
 
                         <div className="space-y-6 text-brand-text-muted text-base md:text-lg leading-relaxed font-light mb-10">
                             <p>
-                                I've lived and worked in this region long enough to know which neighbourhoods are undervalued right now, which schools are the best-kept secrets, and which streets sell before they even hit the market. I know the neighborhoods, the schools, the market trends, and what makes each area unique.
+                                I've lived and worked in this region long enough to know which neighbourhoods are undervalued right now, which schools are the best-kept secrets, and which streets sell before they even hit the market. I know the neighbourhoods, the schools, the market trends, and what makes each area unique.
                             </p>
                             <p>
                                 Before real estate, I spent years at Rogers in data analytics and sales management. That background means I come to every transaction with a clear head and real numbers, not hunches. I'll tell you what your home is actually worth, and I'll tell you honestly if I think an offer is too high.
