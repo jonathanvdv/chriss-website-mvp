@@ -31,7 +31,7 @@ function Counter({ end, suffix = '', prefix = '', label }: StatProps) {
 
     return (
         <div className="flex flex-col items-center text-center p-6 border-r border-brand-border/10 last:border-r-0 md:border-b-0 border-b md:last:border-b-0">
-            <span ref={ref} className="text-4xl md:text-5xl lg:text-6xl font-display text-brand-gold mb-2">
+            <span ref={ref} className="text-3xl md:text-4xl lg:text-5xl font-accent text-brand-gold mb-2 font-light tabular-nums">
                 {prefix}{count}{suffix}
             </span>
             <span className="text-sm font-semibold tracking-widest uppercase text-brand-text-muted">

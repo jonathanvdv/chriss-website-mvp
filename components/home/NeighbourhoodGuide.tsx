@@ -46,7 +46,7 @@ export function NeighbourhoodGuide() {
                         Find Your <span className="italic text-brand-accent">Neighbourhood</span>
                     </h2>
                     <p className="max-w-2xl text-brand-text-muted text-lg leading-relaxed font-light">
-                        Waterloo Region (Kitchener, Waterloo, Cambridge, Breslau, & More) has a neighbourhood for every lifestyle. Here's where to start.
+                        Waterloo Region (Kitchener, Waterloo, Cambridge, Breslau, & GTA) has a neighbourhood for every lifestyle. Here's where to start.
                     </p>
                 </AnimatedSection>
 

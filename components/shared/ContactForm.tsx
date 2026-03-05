@@ -12,7 +12,7 @@ const schema = z.object({
     phone: z.string().optional(),
     message: z.string().min(10, 'Please write a brief message (min 10 characters)'),
     intent: z.enum(['Buy', 'Sell', 'Both', 'Just Curious']).optional(),
-    language: z.enum(['English', 'Hindi', 'Persian', 'Urdu', 'Dari', 'Farsi']).optional(),
+    language: z.enum(['English', 'Farsi', 'Dari', 'Persian', 'Hindi', 'Urdu']).optional(),
     listingAddress: z.string().optional(),
 })
 
@@ -140,11 +140,11 @@ export function ContactForm({ className = '', defaultMessage = '', defaultIntent
                         className="w-full border border-brand-border px-4 py-3 bg-brand-bg focus:outline-none focus:border-brand-accent transition-colors text-brand-text"
                     >
                         <option value="English">English</option>
-                        <option value="Hindi">Hindi</option>
-                        <option value="Persian">Persian</option>
-                        <option value="Urdu">Urdu</option>
-                        <option value="Dari">Dari</option>
                         <option value="Farsi">Farsi</option>
+                        <option value="Dari">Dari</option>
+                        <option value="Persian">Persian</option>
+                        <option value="Hindi">Hindi</option>
+                        <option value="Urdu">Urdu</option>
                     </select>
                 </div>
             )}

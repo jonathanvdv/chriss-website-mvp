@@ -21,10 +21,10 @@ export async function FeaturedListings() {
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                         <div className="max-w-2xl">
                             <h2 className="font-display text-4xl md:text-5xl text-brand-text mb-6">
-                                Homes Available in Waterloo Region (Kitchener, Waterloo, Cambridge, Breslau, & More)
+                                Homes Available in the Area
                             </h2>
                             <p className="text-brand-text-muted text-lg leading-relaxed font-light">
-                                Browse a selection of current listings across Kitchener, Waterloo, and Cambridge. New properties added daily.
+                                Browse current listings across Kitchener, Waterloo, Cambridge, Breslau, & GTA. New properties added daily.
                             </p>
                         </div>
                         <div className="hidden md:block">

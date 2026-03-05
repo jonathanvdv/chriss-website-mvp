@@ -18,7 +18,7 @@ const outfit = Outfit({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://abdulbasharmal.com'), // TODO: update to real domain
+  metadataBase: new URL('https://abdulbasharmal.com'),
   title: {
     default: 'Abdul Basharmal | REALTOR® in Waterloo Region | RE/MAX Twin City',
     template: '%s | Abdul Basharmal Real Estate',

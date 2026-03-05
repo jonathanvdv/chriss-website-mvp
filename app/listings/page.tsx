@@ -69,15 +69,6 @@ export default async function ListingsPage({
                     </div>
                 )}
 
-                {/* Pagination placeholder - just a simple button for now depending on API capabilities */}
-                {listings.length === 12 && (
-                    <div className="mt-12 text-center">
-                        <button className="border border-brand-border hover:bg-white text-brand-text font-medium px-8 py-4 transition-colors text-center uppercase tracking-wider text-sm">
-                            Load More Listings
-                        </button>
-                    </div>
-                )}
-
                 <ListingDisclaimer lastUpdated={new Date().toLocaleDateString('en-CA')} />
             </div>
         </div>

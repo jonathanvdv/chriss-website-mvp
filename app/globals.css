@@ -25,6 +25,7 @@
 
   --font-display: var(--font-cormorant);
   --font-body: var(--font-outfit);
+  --font-accent: var(--font-outfit);
 }
 
 body {

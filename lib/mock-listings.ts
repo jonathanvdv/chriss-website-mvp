@@ -27,7 +27,8 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: 'Parking Included', heating: 'Forced Air', cooling: 'Central Air' },
-        idxLink: 'https://www.realtor.ca/real-estate/27674251/405-myers-road-unit-b30-cambridge',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: 'https://www.realtor.ca/real-estate/27674251/405-myers-road-unit-b30-cambridge',
     },
     {
         id: 'mock-1',
@@ -55,7 +56,8 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: '2 Car Attached', heating: 'Forced Air Gas', cooling: 'Central Air' },
-        idxLink: '#',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: '#',
     },
     {
         id: 'mock-2',
@@ -83,7 +85,8 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: '1 Car Detached', heating: 'Forced Air Gas', cooling: 'Central Air' },
-        idxLink: '#',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: '#',
     },
     {
         id: 'mock-3',
@@ -111,7 +114,8 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: 'None', heating: 'Forced Air Gas', cooling: 'None' },
-        idxLink: '#',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: '#',
     },
     {
         id: 'mock-4',
@@ -139,7 +143,8 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: '3 Car Attached', heating: 'Forced Air Gas', cooling: 'Central Air' },
-        idxLink: '#',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: '#',
     },
     {
         id: 'mock-5',
@@ -167,7 +172,8 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: '1 Underground', heating: 'Heat Pump', cooling: 'Central Air' },
-        idxLink: '#',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: '#',
     },
     {
         id: 'mock-6',
@@ -195,6 +201,7 @@ export const mockListings: Listing[] = [
         status: 'Active',
         virtualTour: null,
         features: { garage: '1 Car Attached', heating: 'Forced Air Gas', cooling: 'Central Air' },
-        idxLink: '#',
+        listingBrokerage: 'RE/MAX Twin City Realty Inc.',
+        realtorCaUrl: '#',
     }
 ]

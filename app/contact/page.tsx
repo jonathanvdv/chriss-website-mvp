@@ -73,19 +73,19 @@ export default async function ContactPage({
 
                         <div className="mt-12 pt-12 border-t border-brand-border/20">
                             <p className="text-brand-border/80 text-sm italic mb-8">
-                                I'm happy to connect in English, Hindi, Persian, Urdu, Dari, or Farsi.
+                                I'm happy to connect in English, Farsi, Dari, Persian, Hindi, or Urdu.
                             </p>
 
                             <div className="flex gap-4">
-                                <a href="#" className="w-10 h-10 rounded-full border border-brand-border/20 flex items-center justify-center hover:bg-brand-accent hover:border-brand-accent transition-colors text-white">
+                                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-brand-border/20 flex items-center justify-center hover:bg-brand-accent hover:border-brand-accent transition-colors text-white">
                                     <span className="sr-only">Instagram</span>
                                     <Instagram className="w-4 h-4" />
                                 </a>
-                                <a href="#" className="w-10 h-10 rounded-full border border-brand-border/20 flex items-center justify-center hover:bg-brand-accent hover:border-brand-accent transition-colors text-white">
+                                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-brand-border/20 flex items-center justify-center hover:bg-brand-accent hover:border-brand-accent transition-colors text-white">
                                     <span className="sr-only">Facebook</span>
                                     <Facebook className="w-4 h-4" />
                                 </a>
-                                <a href="#" className="w-10 h-10 rounded-full border border-brand-border/20 flex items-center justify-center hover:bg-brand-accent hover:border-brand-accent transition-colors text-white">
+                                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full border border-brand-border/20 flex items-center justify-center hover:bg-brand-accent hover:border-brand-accent transition-colors text-white">
                                     <span className="sr-only">LinkedIn</span>
                                     <Linkedin className="w-4 h-4" />
                                 </a>

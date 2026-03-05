@@ -1,12 +1,36 @@
-const API_BASE = process.env.IDXBROKER_API_BASE || 'https://api.idxbroker.com'
-const API_KEY = process.env.IDXBROKER_API_KEY || ''
+const DDF_TOKEN_URL = 'https://identity.crea.ca/connect/token'
+const DDF_API_BASE = 'https://ddfapi.realtor.ca/odata/v1'
+const DDF_CLIENT_ID = process.env.DDF_CLIENT_ID || ''
+const DDF_CLIENT_SECRET = process.env.DDF_CLIENT_SECRET || ''
 
-// Shared headers for every IDX Broker request
-const idxHeaders = {
-    'accesskey': API_KEY,
-    'outputtype': 'json',
-    'apiversion': '1.4.0',
-    'Content-Type': 'application/json',
+// ─── Token Cache ─────────────────────────────────────────────────────────
+let cachedToken: string | null = null
+let tokenExpiry = 0
+
+async function getDdfToken(): Promise<string> {
+    if (cachedToken && Date.now() < tokenExpiry) return cachedToken
+
+    const res = await fetch(DDF_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id: DDF_CLIENT_ID,
+            client_secret: DDF_CLIENT_SECRET,
+            grant_type: 'client_credentials',
+            scope: 'DDFApi_Read',
+        }),
+    })
+
+    if (!res.ok) {
+        console.error('DDF token error:', res.status, res.statusText)
+        throw new Error('Failed to authenticate with CREA DDF')
+    }
+
+    const data = await res.json()
+    cachedToken = data.access_token
+    // Token lasts 60 min, refresh 5 min early
+    tokenExpiry = Date.now() + (55 * 60 * 1000)
+    return cachedToken!
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -31,8 +55,8 @@ export interface Listing {
     propertyType: string
     yearBuilt: number | null
     description: string
-    photos: string[]           // array of full image URLs
-    listDate: string           // ISO date string
+    photos: string[]
+    listDate: string
     daysOnMarket: number
     status: 'Active' | 'Sold' | 'Pending'
     virtualTour: string | null
@@ -43,7 +67,8 @@ export interface Listing {
         basement?: string
         [key: string]: string | undefined
     }
-    idxLink: string            // link back to IDX Broker's hosted detail page - required by some board rules
+    realtorCaUrl: string       // required link back to REALTOR.ca listing
+    listingBrokerage: string   // required brokerage attribution
 }
 
 export interface ListingFilters {
@@ -59,152 +84,176 @@ export interface ListingFilters {
     sortDirection?: 'asc' | 'desc'
 }
 
+// ─── Build OData filter string ──────────────────────────────────────────
+
+function buildODataFilter(filters: ListingFilters): string {
+    const parts: string[] = []
+
+    if (filters.minPrice) parts.push(`ListPrice ge ${filters.minPrice}`)
+    if (filters.maxPrice) parts.push(`ListPrice le ${filters.maxPrice}`)
+    if (filters.beds) parts.push(`BedroomsTotal ge ${filters.beds}`)
+    if (filters.baths) parts.push(`BathroomsTotalInteger ge ${filters.baths}`)
+    if (filters.city) parts.push(`City eq '${filters.city}'`)
+    if (filters.propertyType) parts.push(`PropertyType eq '${filters.propertyType}'`)
+
+    return parts.join(' and ')
+}
+
+function buildODataOrderBy(filters: ListingFilters): string {
+    const dir = filters.sortDirection || 'desc'
+    if (filters.sortField === 'listingPrice') return `ListPrice ${dir}`
+    return `ListingContractDate ${dir}`
+}
+
 // ─── Fetch All Listings ──────────────────────────────────────────────────
 
 export async function getListings(filters: ListingFilters = {}): Promise<Listing[]> {
-    if (!process.env.IDXBROKER_API_KEY) {
-        console.warn('⚠️  No IDXBROKER_API_KEY set - returning mock listings')
+    if (!DDF_CLIENT_ID) {
+        console.warn('⚠️  No DDF_CLIENT_ID set - returning mock listings')
         const { mockListings } = await import('./mock-listings')
-        return mockListings.slice(0, filters.limit || 12)
+        return applyMockFilters(mockListings, filters)
     }
 
+    const token = await getDdfToken()
     const params = new URLSearchParams()
+    params.set('$top', (filters.limit || 12).toString())
+    if (filters.offset) params.set('$skip', filters.offset.toString())
 
-    if (filters.minPrice) params.set('lp', filters.minPrice.toString())
-    if (filters.maxPrice) params.set('hp', filters.maxPrice.toString())
-    if (filters.beds) params.set('bd', filters.beds.toString())
-    if (filters.baths) params.set('ba', filters.baths.toString())
-    if (filters.propertyType) params.set('pt', filters.propertyType)
-    if (filters.city) params.set('city', filters.city)
-    if (filters.limit) params.set('count', filters.limit.toString())
-    if (filters.offset) params.set('start', filters.offset.toString())
-    if (filters.sortField) params.set('sortField', filters.sortField)
-    if (filters.sortDirection) params.set('sortDirection', filters.sortDirection || 'desc')
+    const filter = buildODataFilter(filters)
+    if (filter) params.set('$filter', filter)
+    params.set('$orderby', buildODataOrderBy(filters))
+    params.set('$expand', 'Media')
 
-    const response = await fetch(
-        `${API_BASE}/clients/listings?${params.toString()}`,
-        {
-            headers: idxHeaders,
-            next: { revalidate: 300 }, // cache for 5 minutes - listings don't change by the second
-        }
-    )
+    const res = await fetch(`${DDF_API_BASE}/Property?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        next: { revalidate: 300 },
+    })
 
-    if (!response.ok) {
-        console.error('IDX Broker API error:', response.status, response.statusText)
-        throw new Error(`Failed to fetch listings: ${response.status}`)
+    if (!res.ok) {
+        console.error('DDF API error:', res.status, res.statusText)
+        throw new Error(`Failed to fetch listings: ${res.status}`)
     }
 
-    const data = await response.json()
-
-    // IDX Broker returns listings as an object keyed by listingID, not an array
-    // Convert to array and normalize
-    const listingsArray = Object.values(data) as any[]
-    return listingsArray.map(normalizeIdxListing)
+    const data = await res.json()
+    return (data.value || []).map(normalizeDdfListing)
 }
 
 // ─── Fetch Single Listing ────────────────────────────────────────────────
 
 export async function getListing(listingId: string): Promise<Listing> {
-    if (!process.env.IDXBROKER_API_KEY) {
+    if (!DDF_CLIENT_ID) {
         const { mockListings } = await import('./mock-listings')
         const found = mockListings.find(l => l.id === listingId)
         if (!found) throw new Error('Listing not found')
         return found
     }
 
-    const response = await fetch(
-        `${API_BASE}/clients/listings/${listingId}`,
-        {
-            headers: idxHeaders,
-            next: { revalidate: 300 },
-        }
-    )
+    const token = await getDdfToken()
+    const params = new URLSearchParams()
+    params.set('$expand', 'Media')
+    params.set('$filter', `ListingKey eq '${listingId}'`)
 
-    if (!response.ok) throw new Error(`Listing not found: ${listingId}`)
+    const res = await fetch(`${DDF_API_BASE}/Property?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        next: { revalidate: 300 },
+    })
 
-    const data = await response.json()
-    return normalizeIdxListing(data)
+    if (!res.ok) throw new Error(`Listing not found: ${listingId}`)
+
+    const data = await res.json()
+    if (!data.value || data.value.length === 0) throw new Error('Listing not found')
+    return normalizeDdfListing(data.value[0])
 }
 
-// ─── Fetch Featured Listings (Abdul's own active listings) ────────────────
+// ─── Fetch Featured Listings ─────────────────────────────────────────────
 
 export async function getFeaturedListings(limit = 6): Promise<Listing[]> {
-    if (!process.env.IDXBROKER_API_KEY) {
+    if (!DDF_CLIENT_ID) {
         const { mockListings } = await import('./mock-listings')
         return mockListings.slice(0, limit)
     }
 
-    const response = await fetch(
-        `${API_BASE}/clients/featured`,
-        {
-            headers: idxHeaders,
-            next: { revalidate: 300 },
-        }
-    )
-
-    if (!response.ok) {
-        // If no featured listings exist yet, fall back to recent listings
-        console.warn('No featured listings found, falling back to recent listings')
-        return getListings({ limit, sortField: 'listingDate', sortDirection: 'desc' })
-    }
-
-    const data = await response.json()
-    const listingsArray = Object.values(data) as any[]
-    return listingsArray.slice(0, limit).map(normalizeIdxListing)
+    // Get most recent active listings as "featured"
+    return getListings({ limit, sortField: 'listingDate', sortDirection: 'desc' })
 }
 
-// ─── Normalize IDX Broker response to our Listing type ───────────────────
-// IDX Broker field names documented at:
-// https://middleware.idxbroker.com/docs/api/methods/index.html#api-Clients-GetClientListings
+// ─── Normalize DDF RESO response to our Listing type ─────────────────────
 
-function normalizeIdxListing(raw: any): Listing {
-    // Build the full address string
-    const unitPart = raw.unitNumber ? ` Unit ${raw.unitNumber}` : ''
-    const fullAddress = `${raw.streetNumber} ${raw.streetName}${unitPart}, ${raw.cityName}, ${raw.stateAbbr} ${raw.zipcode}`
+function normalizeDdfListing(raw: any): Listing {
+    const streetNum = raw.StreetNumber || ''
+    const streetName = raw.StreetName || ''
+    const streetSuffix = raw.StreetSuffix || ''
+    const unit = raw.UnitNumber || null
+    const city = raw.City || ''
+    const province = raw.StateOrProvince || 'ON'
+    const postal = raw.PostalCode || ''
 
-    // IDX Broker returns photos as an object: { "0": "url1", "1": "url2", ... }
-    const photos = raw.image
-        ? Object.values(raw.image as Record<string, string>)
-        : []
+    const unitPart = unit ? ` Unit ${unit}` : ''
+    const fullAddress = `${streetNum} ${streetName} ${streetSuffix}${unitPart}, ${city}, ${province} ${postal}`.trim()
+
+    // Media array from DDF
+    const photos = (raw.Media || [])
+        .filter((m: any) => m.MediaCategory === 'Photo' || m.MediaType?.startsWith('image'))
+        .sort((a: any, b: any) => (a.Order || 0) - (b.Order || 0))
+        .map((m: any) => m.MediaURL)
+
+    // Calculate days on market
+    const listDate = raw.ListingContractDate || raw.OriginalEntryTimestamp || ''
+    const dom = listDate ? Math.floor((Date.now() - new Date(listDate).getTime()) / (1000 * 60 * 60 * 24)) : 0
 
     return {
-        id: raw.listingID,
-        mlsNumber: raw.listingID,
+        id: raw.ListingKey,
+        mlsNumber: raw.ListingId || raw.ListingKey,
         address: {
             full: fullAddress,
-            streetNumber: raw.streetNumber || '',
-            streetName: raw.streetName || '',
-            unitNumber: raw.unitNumber || null,
-            city: raw.cityName || '',
-            province: raw.stateAbbr || 'ON',
-            postalCode: raw.zipcode || '',
+            streetNumber: streetNum,
+            streetName: `${streetName} ${streetSuffix}`.trim(),
+            unitNumber: unit,
+            city,
+            province,
+            postalCode: postal,
         },
-        price: parseInt(raw.listingPrice?.replace(/[^0-9]/g, '') || '0', 10),
-        beds: parseInt(raw.bedrooms || '0', 10),
-        baths: parseFloat(raw.totalBaths || raw.bathsFull || '0'),
-        sqft: raw.sqFt ? parseInt(raw.sqFt.replace(/[^0-9]/g, ''), 10) : null,
-        lotSize: raw.lotSize || null,
-        propertyType: raw.propType || raw.propSubType || 'Residential',
-        yearBuilt: raw.yearBuilt ? parseInt(raw.yearBuilt, 10) : null,
-        description: raw.remarksConcat || raw.publicRemarks || '',
-        photos: photos as string[],
-        listDate: raw.listingDate || '',
-        daysOnMarket: parseInt(raw.daysOnMarket || '0', 10),
-        status: normalizeStatus(raw.idxStatus),
-        virtualTour: raw.virtualTourLink || null,
+        price: raw.ListPrice || 0,
+        beds: raw.BedroomsTotal || 0,
+        baths: raw.BathroomsTotalInteger || 0,
+        sqft: raw.LivingArea || null,
+        lotSize: raw.LotSizeArea ? `${raw.LotSizeArea}` : null,
+        propertyType: raw.PropertySubType || raw.PropertyType || 'Residential',
+        yearBuilt: raw.YearBuilt || null,
+        description: raw.PublicRemarks || '',
+        photos,
+        listDate,
+        daysOnMarket: dom,
+        status: normalizeStatus(raw.StandardStatus || raw.MlsStatus),
+        virtualTour: raw.VirtualTourURLUnbranded || raw.VirtualTourURLBranded || null,
         features: {
-            garage: raw.garage,
-            heating: raw.heatType,
-            cooling: raw.cooling,
-            basement: raw.basement,
+            garage: raw.GarageSpaces ? `${raw.GarageSpaces} spaces` : undefined,
+            heating: raw.Heating ? (Array.isArray(raw.Heating) ? raw.Heating.join(', ') : raw.Heating) : undefined,
+            cooling: raw.Cooling ? (Array.isArray(raw.Cooling) ? raw.Cooling.join(', ') : raw.Cooling) : undefined,
+            basement: raw.Basement ? (Array.isArray(raw.Basement) ? raw.Basement.join(', ') : raw.Basement) : undefined,
         },
-        idxLink: raw.detailsURL || `https://www.idxbroker.com/listing/${raw.listingID}`,
+        realtorCaUrl: `https://www.realtor.ca/real-estate/${raw.ListingKey}`,
+        listingBrokerage: raw.ListOfficeName || '',
     }
 }
 
-function normalizeStatus(idxStatus: string): 'Active' | 'Sold' | 'Pending' {
-    const s = (idxStatus || '').toLowerCase()
-    if (s === 'sold') return 'Sold'
-    if (s === 'pending' || s === 'cs' || s === 'contingent') return 'Pending'
+function normalizeStatus(status: string): 'Active' | 'Sold' | 'Pending' {
+    const s = (status || '').toLowerCase()
+    if (s.includes('sold') || s.includes('closed')) return 'Sold'
+    if (s.includes('pending') || s.includes('contingent')) return 'Pending'
     return 'Active'
+}
+
+// ─── Mock data filter helper ─────────────────────────────────────────────
+
+function applyMockFilters(listings: Listing[], filters: ListingFilters): Listing[] {
+    let result = [...listings]
+
+    if (filters.minPrice) result = result.filter(l => l.price >= filters.minPrice!)
+    if (filters.maxPrice) result = result.filter(l => l.price <= filters.maxPrice!)
+    if (filters.beds) result = result.filter(l => l.beds >= filters.beds!)
+    if (filters.baths) result = result.filter(l => l.baths >= filters.baths!)
+    if (filters.city) result = result.filter(l => l.address.city === filters.city)
+
+    return result.slice(0, filters.limit || 12)
 }

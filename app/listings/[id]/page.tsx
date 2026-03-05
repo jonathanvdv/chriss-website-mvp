@@ -141,12 +141,12 @@ export default async function ListingDetailPage({
                                         </div>
                                     ))}
 
-                                    {listing.idxLink && listing.idxLink !== '#' && (
+                                    {listing.realtorCaUrl && listing.realtorCaUrl !== '#' && (
                                         <div className="p-4 sm:grid sm:grid-cols-3 sm:gap-4 flex items-center">
-                                            <dt className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted">Original Listing</dt>
+                                            <dt className="text-xs font-semibold uppercase tracking-wider text-brand-text-muted">View on REALTOR.ca</dt>
                                             <dd className="mt-1 text-sm text-brand-text sm:mt-0 sm:col-span-2">
-                                                <a href={listing.idxLink} target="_blank" rel="noopener noreferrer" className="text-brand-accent hover:underline">
-                                                    View on MLS®
+                                                <a href={listing.realtorCaUrl} target="_blank" rel="noopener noreferrer" className="text-brand-accent hover:underline">
+                                                    View on REALTOR.ca →
                                                 </a>
                                             </dd>
                                         </div>

@@ -44,7 +44,6 @@ export default function Home() {
                 </p>
 
                 <div className="space-y-6">
-                  {/* TODO: Update phone number */}
                   <a href="tel:905-906-0045" className="flex items-center gap-4 text-brand-text group">
                     <span className="w-12 h-12 rounded-full bg-white flex items-center justify-center border border-brand-border shadow-sm group-hover:scale-105 transition-transform duration-300">
                       <span className="font-display text-xl">📞</span>
@@ -55,7 +54,6 @@ export default function Home() {
                     </div>
                   </a>
 
-                  {/* TODO: Update email */}
                   <a href="mailto:abdulbashrealtor@gmail.com" className="flex items-center gap-4 text-brand-text group">
                     <span className="w-12 h-12 rounded-full bg-white flex items-center justify-center border border-brand-border shadow-sm group-hover:scale-105 transition-transform duration-300">
                       <span className="font-display text-xl">✉️</span>
@@ -70,16 +68,15 @@ export default function Home() {
                 <div className="mt-10 pt-8 border-t border-brand-border">
                   <p className="text-sm font-semibold text-brand-text mb-4 uppercase tracking-wider">Follow for Market Updates</p>
                   <div className="flex gap-4">
-                    {/* TODO: Update with real social links */}
-                    <a href="#" className="w-10 h-10 rounded-sm bg-white border border-brand-border flex items-center justify-center text-brand-text hover:text-brand-accent hover:border-brand-accent transition-colors shadow-sm">
+                    <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-sm bg-white border border-brand-border flex items-center justify-center text-brand-text hover:text-brand-accent hover:border-brand-accent transition-colors shadow-sm">
                       <span className="sr-only">Instagram</span>
                       <Instagram className="w-4 h-4" />
                     </a>
-                    <a href="#" className="w-10 h-10 rounded-sm bg-white border border-brand-border flex items-center justify-center text-brand-text hover:text-brand-accent hover:border-brand-accent transition-colors shadow-sm">
+                    <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-sm bg-white border border-brand-border flex items-center justify-center text-brand-text hover:text-brand-accent hover:border-brand-accent transition-colors shadow-sm">
                       <span className="sr-only">Facebook</span>
                       <Facebook className="w-4 h-4" />
                     </a>
-                    <a href="#" className="w-10 h-10 rounded-sm bg-white border border-brand-border flex items-center justify-center text-brand-text hover:text-brand-accent hover:border-brand-accent transition-colors shadow-sm">
+                    <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-sm bg-white border border-brand-border flex items-center justify-center text-brand-text hover:text-brand-accent hover:border-brand-accent transition-colors shadow-sm">
                       <span className="sr-only">LinkedIn</span>
                       <Linkedin className="w-4 h-4" />
                     </a>

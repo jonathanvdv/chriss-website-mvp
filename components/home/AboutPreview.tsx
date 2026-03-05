@@ -34,7 +34,7 @@ export function AboutPreview() {
                                 Before real estate, I spent years at Rogers in data analytics and sales management. That background means I come to every transaction with a clear head and real numbers, not hunches. I'll tell you what your home is actually worth, and I'll tell you honestly if I think an offer is too high.
                             </p>
                             <p>
-                                Real estate is more than just a transaction to me. It is about helping people build their lives and put down roots in a place they can truly call home. I also serve the English, Hindi, Persian, Urdu, Dari, and Farsi-speaking communities across Waterloo Region. If you or your family are more comfortable navigating this process in any of these languages, that's exactly how we'll do it.
+                                Real estate is more than just a transaction to me. It is about helping people build their lives and put down roots in a place they can truly call home. I also serve the English, Farsi, Dari, Persian, Hindi, and Urdu-speaking communities across Waterloo Region. If you or your family are more comfortable navigating this process in any of these languages, that's exactly how we'll do it.
                             </p>
                         </div>
 

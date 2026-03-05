@@ -8,6 +8,16 @@ const nextConfig: NextConfig = {
         hostname: 'cdn.realtor.ca',
         pathname: '**',
       },
+      {
+        protocol: 'https',
+        hostname: '*.realtor.ca',
+        pathname: '**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.realtor.ca',
+        pathname: '**',
+      },
     ],
   },
 };

@@ -23,14 +23,14 @@ export default function AboutPage() {
                     sizes="100vw"
                     className="object-contain object-bottom saturate-[1.15]"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-brand-bg-dark/80 via-brand-bg-dark/40 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-bg via-brand-bg/40 to-transparent"></div>
 
                 <div className="relative z-10 text-center px-4 flex-1 flex items-center justify-center w-full mt-20">
-                    <h1 className="font-display text-5xl md:text-7xl text-white">Hi, I'm <span className="italic text-brand-gold">Abdul.</span></h1>
+                    <h1 className="font-display text-5xl md:text-7xl text-brand-text">Hi, I'm <span className="italic text-brand-accent">Abdul.</span></h1>
                 </div>
 
                 <div className="relative z-20 pb-8 mt-auto flex justify-center w-full">
-                    <ChevronDown className="w-8 h-8 text-white animate-bounce" />
+                    <ChevronDown className="w-8 h-8 text-brand-text animate-bounce" />
                 </div>
             </section>
 
@@ -39,7 +39,7 @@ export default function AboutPage() {
                 <div className="text-center mb-16">
                     <p className="text-brand-accent text-xs font-semibold uppercase tracking-widest mb-6">My Story</p>
                     <h2 className="font-display text-4xl md:text-5xl text-brand-text mb-10 leading-tight">
-                        I Don't Just Sell Homes — I Help Families <span className="italic text-brand-accent">Move Forward</span>
+                        I Don't Just Sell Homes. <br className="hidden md:block" />I Help Families <span className="italic text-brand-accent">Move Forward</span>
                     </h2>
                 </div>
 
@@ -54,7 +54,7 @@ export default function AboutPage() {
                         Whether you are purchasing your first home, expanding your investment portfolio in the Waterloo or Toronto regions, selling to move on to your next chapter, or seeking advice on residential financing and leasing, I am here to support you every step of the way.
                     </p>
                     <p>
-                        I proudly serve our diverse community in multiple languages, including <strong>English, Hindi, Persian, Urdu, Dari, and Farsi</strong>, ensuring every client feels understood and confident throughout the process.
+                        I proudly serve our diverse community in multiple languages, including <strong>English, Farsi, Dari, Persian, Hindi, and Urdu</strong>, ensuring every client feels understood and confident throughout the process.
                     </p>
                     <p>
                         Based in Kitchener and working with RE/MAX Twin City Realty, I bring a professional and results driven approach to every interaction. I look forward to helping you achieve your real estate goals.
@@ -110,60 +110,53 @@ export default function AboutPage() {
             </section>
 
             {/* Credentials Section */}
-            <section className="py-24 bg-brand-bg-dark text-white">
+            <section className="py-24 bg-brand-bg">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-16 lg:gap-24">
 
                         {/* Background */}
                         <div>
-                            <p className="text-brand-gold text-xs font-semibold uppercase tracking-widest mb-8 border-b border-brand-border/20 pb-4">Background</p>
-                            <ul className="space-y-6 text-brand-border/80 text-lg font-light">
+                            <p className="text-brand-accent text-xs font-semibold uppercase tracking-widest mb-8 border-b border-brand-border pb-4">Background</p>
+                            <ul className="space-y-6 text-brand-text-muted text-lg font-light">
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
-                                    <span><strong>Former Data Insights Analyst</strong><br /><span className="text-sm">Rogers Communications</span></span>
+                                    <span className="text-brand-accent mt-1">•</span>
+                                    <span><strong className="text-brand-text">Former Data Insights Analyst</strong><br /><span className="text-sm">Rogers Communications</span></span>
                                 </li>
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
-                                    <span><strong>Former Assistant Manager, Field Sales</strong><br /><span className="text-sm">Rogers Communications</span></span>
+                                    <span className="text-brand-accent mt-1">•</span>
+                                    <span><strong className="text-brand-text">Former Assistant Manager, Field Sales</strong><br /><span className="text-sm">Rogers Communications</span></span>
                                 </li>
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
-                                    <span><strong>Based in:</strong> Kitchener, Ontario</span>
+                                    <span className="text-brand-accent mt-1">•</span>
+                                    <span><strong className="text-brand-text">Based in:</strong> Kitchener, Ontario</span>
                                 </li>
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
-                                    <span><strong>Languages:</strong> English, Hindi, Persian, Urdu, Dari, Farsi</span>
+                                    <span className="text-brand-accent mt-1">•</span>
+                                    <span><strong className="text-brand-text">Languages:</strong> English, Farsi, Dari, Persian, Hindi, Urdu</span>
                                 </li>
                             </ul>
                         </div>
 
                         {/* Credentials */}
                         <div>
-                            <p className="text-brand-gold text-xs font-semibold uppercase tracking-widest mb-8 border-b border-brand-border/20 pb-4">Credentials & Affiliations</p>
-                            <ul className="space-y-6 text-brand-border/80 text-lg font-light">
+                            <p className="text-brand-accent text-xs font-semibold uppercase tracking-widest mb-8 border-b border-brand-border pb-4">Credentials & Affiliations</p>
+                            <ul className="space-y-6 text-brand-text-muted text-lg font-light">
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
+                                    <span className="text-brand-accent mt-1">•</span>
                                     <span>Licensed REALTOR® - Province of Ontario</span>
                                 </li>
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
+                                    <span className="text-brand-accent mt-1">•</span>
                                     <span>Member: Canadian Real Estate Association (CREA)</span>
                                 </li>
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
+                                    <span className="text-brand-accent mt-1">•</span>
                                     <span>Member: Waterloo Region Association of REALTORS® (WRAR)</span>
                                 </li>
                                 <li className="flex gap-4">
-                                    <span className="text-brand-gold mt-1">•</span>
+                                    <span className="text-brand-accent mt-1">•</span>
                                     <span>Brokerage: RE/MAX Twin City Realty Inc.</span>
                                 </li>
-                                {/* 
-                // TODO: Add any designations or awards here
-                <li className="flex gap-4">
-                  <span className="text-brand-gold mt-1">•</span>
-                  <span>Awards / Designations placeholder</span>
-                </li> 
-                */}
                             </ul>
                         </div>
                     </div>

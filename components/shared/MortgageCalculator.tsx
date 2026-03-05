@@ -147,7 +147,7 @@ export function MortgageCalculator() {
                     <p className="text-xs uppercase tracking-widest text-brand-border/60 font-semibold mb-3">
                         Estimated {freq.toLowerCase()} payment
                     </p>
-                    <div className="text-5xl md:text-6xl font-display text-brand-gold mb-3">
+                    <div className="text-5xl md:text-6xl font-accent text-brand-gold mb-3 tabular-nums font-light">
                         {formatCurrency(payment)}
                     </div>
                     <p className="text-xs text-brand-border/50 font-light mb-10 max-w-[260px]">
