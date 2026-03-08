@@ -2,7 +2,7 @@
 
 import { motion, useInView, animate } from 'framer-motion'
 import { useRef, useEffect, useState } from 'react'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
 
 interface StatProps {
     end: number

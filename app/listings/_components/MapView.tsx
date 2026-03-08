@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { ListingMap, type MapBounds } from '@/components/listings/ListingMap'
-import { MapPinCard } from '@/components/listings/MapPinCard'
+import { ListingMap, type MapBounds } from './ListingMap'
+import { MapPinCard } from './MapPinCard'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { MapPin } from '@/lib/listings'
 

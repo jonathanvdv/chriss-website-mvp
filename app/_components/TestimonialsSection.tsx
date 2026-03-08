@@ -1,5 +1,5 @@
-import { SectionLabel } from '@/components/shared/SectionLabel'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
+import { SectionLabel } from '@/components/ui/SectionLabel'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
 
 export function TestimonialsSection() {
     const testimonials = [

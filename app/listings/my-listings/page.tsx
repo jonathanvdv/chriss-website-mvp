@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
 import { getAgentListings } from '@/lib/listings'
-import { ListingCard } from '@/components/listings/ListingCard'
-import { ListingDisclaimer } from '@/components/listings/ListingDisclaimer'
+import { ListingCard } from '../_components/ListingCard'
+import { ListingDisclaimer } from '../_components/ListingDisclaimer'
 import Image from 'next/image'
 
 export const metadata: Metadata = {

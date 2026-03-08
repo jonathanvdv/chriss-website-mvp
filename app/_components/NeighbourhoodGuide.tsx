@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { SectionLabel } from '@/components/shared/SectionLabel'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
+import { SectionLabel } from '@/components/ui/SectionLabel'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
 import { MapPin } from 'lucide-react'
 
 export function NeighbourhoodGuide({ showHeader = true }: { showHeader?: boolean }) {

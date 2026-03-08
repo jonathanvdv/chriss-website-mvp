@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { NeighbourhoodGuide } from '@/components/home/NeighbourhoodGuide'
+import { NeighbourhoodGuide } from '@/app/_components/NeighbourhoodGuide'
 
 export const metadata: Metadata = {
     title: 'Neighbourhoods Guide | Kitchener, Waterloo & Cambridge',

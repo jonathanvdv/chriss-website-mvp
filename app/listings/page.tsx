@@ -1,11 +1,11 @@
 import { Metadata } from 'next'
 import { getListings, getListingCount, ListingFilters } from '@/lib/listings'
-import { ListingSearch } from '@/components/listings/ListingSearch'
-import { ListingCard } from '@/components/listings/ListingCard'
-import { ListingDisclaimer } from '@/components/listings/ListingDisclaimer'
-import { Pagination } from '@/components/listings/Pagination'
-import { MapView } from './MapView'
-import { ListingsTermsGate } from '@/components/listings/ListingsTermsGate'
+import { ListingSearch } from './_components/ListingSearch'
+import { ListingCard } from './_components/ListingCard'
+import { ListingDisclaimer } from './_components/ListingDisclaimer'
+import { Pagination } from './_components/Pagination'
+import { MapView } from './_components/MapView'
+import { ListingsTermsGate } from './_components/ListingsTermsGate'
 
 export const metadata: Metadata = {
     title: 'Search Listings | Kitchener, Waterloo & Cambridge',

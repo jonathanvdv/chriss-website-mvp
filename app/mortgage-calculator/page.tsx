@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
-import { MortgageCalculator } from '@/components/shared/MortgageCalculator'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
-import { SectionLabel } from '@/components/shared/SectionLabel'
+import { MortgageCalculator } from '@/components/MortgageCalculator'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
+import { SectionLabel } from '@/components/ui/SectionLabel'
 import Link from 'next/link'
 import { DollarSign, ShieldCheck, Clock, TrendingUp, Home, Landmark, BookOpen, Lightbulb } from 'lucide-react'
 

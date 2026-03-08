@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { getFeaturedListings } from '@/lib/listings'
-import { ListingCard } from '@/components/listings/ListingCard'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
-import { SectionLabel } from '@/components/shared/SectionLabel'
+import { ListingCard } from '@/app/listings/_components/ListingCard'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
+import { SectionLabel } from '@/components/ui/SectionLabel'
 
 export async function FeaturedListings() {
     const listings = await getFeaturedListings(6)

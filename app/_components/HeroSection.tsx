@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
 
 export function HeroSection() {
     return (

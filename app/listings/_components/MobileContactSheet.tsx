@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Phone } from 'lucide-react'
 import Image from 'next/image'
-import { ContactForm } from '@/components/shared/ContactForm'
+import { ContactForm } from '@/components/ContactForm'
 
 interface MobileContactSheetProps {
     defaultMessage: string
