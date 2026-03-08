@@ -1,17 +1,56 @@
 import { Resend } from 'resend'
+import { z } from 'zod'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+
+const contactSchema = z.object({
+    firstName: z.string().min(1).max(100),
+    lastName: z.string().min(1).max(100),
+    email: z.string().email().max(320),
+    phone: z.string().max(30).optional(),
+    message: z.string().min(10).max(5000),
+    intent: z.enum(['Buy', 'Sell', 'Both', 'Just Curious']).optional(),
+    language: z.enum(['English', 'Farsi', 'Dari', 'Persian', 'Hindi', 'Urdu']).optional(),
+    listingAddress: z.string().max(500).optional(),
+})
+
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+}
 
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { firstName, lastName, email, phone, message, intent, language, listingAddress } = body
+        const result = contactSchema.safeParse(body)
+
+        if (!result.success) {
+            return Response.json(
+                { success: false, error: 'Invalid form data', details: result.error.flatten().fieldErrors },
+                { status: 400 }
+            )
+        }
+
+        const { firstName, lastName, email, phone, message, intent, language, listingAddress } = result.data
+
+        const safeFirstName = escapeHtml(firstName)
+        const safeLastName = escapeHtml(lastName)
+        const safeEmail = escapeHtml(email)
+        const safePhone = phone ? escapeHtml(phone) : ''
+        const safeMessage = escapeHtml(message)
+        const safeIntent = intent ? escapeHtml(intent) : ''
+        const safeLanguage = language ? escapeHtml(language) : ''
+        const safeListingAddress = listingAddress ? escapeHtml(listingAddress) : ''
 
         const { error } = await resend.emails.send({
             from: 'Abdul Basharmal <no-reply@abdulsellshomes.com>',
             to: 'abdulbashrealtor@gmail.com',
             replyTo: email,
-            subject: `New ${intent || 'Contact'} Inquiry from ${firstName} ${lastName}`,
+            subject: `New ${safeIntent || 'Contact'} Inquiry from ${safeFirstName} ${safeLastName}`,
             html: `
 <!DOCTYPE html>
 <html>
@@ -38,7 +77,7 @@ export async function POST(request: Request) {
 <!-- Title -->
 <tr>
 <td style="padding:32px 40px 16px;">
-<h2 style="margin:0;color:#1a1a1a;font-size:18px;font-weight:400;letter-spacing:1px;">New ${intent || 'Contact'} Inquiry</h2>
+<h2 style="margin:0;color:#1a1a1a;font-size:18px;font-weight:400;letter-spacing:1px;">New ${safeIntent || 'Contact'} Inquiry</h2>
 <p style="margin:8px 0 0;color:#888;font-size:12px;font-family:Arial,Helvetica,sans-serif;">Received from your website</p>
 </td>
 </tr>
@@ -53,37 +92,37 @@ export async function POST(request: Request) {
 <tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Name</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${firstName} ${lastName}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeFirstName} ${safeLastName}</span>
 </td>
 </tr>
 <tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Email</span><br>
-<a href="mailto:${email}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${email}</a>
+<a href="mailto:${safeEmail}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${safeEmail}</a>
 </td>
 </tr>
-${phone ? `<tr>
+${safePhone ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Phone</span><br>
-<a href="tel:${phone}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${phone}</a>
+<a href="tel:${safePhone}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${safePhone}</a>
 </td>
 </tr>` : ''}
-${intent ? `<tr>
+${safeIntent ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Interest</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${intent}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeIntent}</span>
 </td>
 </tr>` : ''}
-${language ? `<tr>
+${safeLanguage ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Preferred Language</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${language}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeLanguage}</span>
 </td>
 </tr>` : ''}
-${listingAddress ? `<tr>
+${safeListingAddress ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Listing Address</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${listingAddress}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeListingAddress}</span>
 </td>
 </tr>` : ''}
 </table>
@@ -97,14 +136,14 @@ ${listingAddress ? `<tr>
 <tr>
 <td style="padding:24px 40px 32px;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Message</span>
-<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${message}</p>
+<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${safeMessage}</p>
 </td>
 </tr>
 
 <!-- Reply CTA -->
 <tr>
 <td style="padding:0 40px 36px;" align="center">
-<a href="mailto:${email}" style="display:inline-block;background-color:#1a1a1a;color:#ffffff;font-size:13px;font-family:Arial,Helvetica,sans-serif;letter-spacing:2px;text-decoration:none;padding:14px 36px;border-radius:2px;">REPLY TO ${firstName.toUpperCase()}</a>
+<a href="mailto:${safeEmail}" style="display:inline-block;background-color:#1a1a1a;color:#ffffff;font-size:13px;font-family:Arial,Helvetica,sans-serif;letter-spacing:2px;text-decoration:none;padding:14px 36px;border-radius:2px;">REPLY TO ${safeFirstName.toUpperCase()}</a>
 </td>
 </tr>
 
