@@ -74,7 +74,10 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
         setAllPins(null)
 
         fetch('/api/listings/map-pins', { priority: 'low' as any })
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error(`Map pins fetch failed: ${r.status}`)
+                return r.json()
+            })
             .then(data => {
                 if (!cancelled) setAllPins(data.pins)
             })
