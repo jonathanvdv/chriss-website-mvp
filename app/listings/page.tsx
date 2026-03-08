@@ -5,6 +5,7 @@ import { ListingCard } from '@/components/listings/ListingCard'
 import { ListingDisclaimer } from '@/components/listings/ListingDisclaimer'
 import { Pagination } from '@/components/listings/Pagination'
 import { MapView } from './MapView'
+import { ListingsTermsGate } from '@/components/listings/ListingsTermsGate'
 
 export const metadata: Metadata = {
     title: 'Search Listings | Kitchener, Waterloo & Cambridge',
@@ -50,17 +51,19 @@ export default async function ListingsPage({
     })
 
     if (view === 'map') {
-        // Map view: only fetch a fast count, no listing data
+        // Map view: fast count + client-side pin fetching
         const totalCount = await getListingCount(filters)
 
         return (
-            <div className="bg-gray-50 min-h-screen pt-24 pb-16">
-                <div className="px-4 sm:px-6">
-                    <ListingSearch initialFilters={filterParams} totalCount={totalCount} />
-                    <MapView filterParams={filterParams} totalCount={totalCount} />
-                    <ListingDisclaimer lastUpdated={new Date().toLocaleDateString('en-CA')} />
+            <ListingsTermsGate>
+                <div className="bg-gray-50 min-h-screen pt-24 pb-16">
+                    <div className="px-4 sm:px-6">
+                        <ListingSearch initialFilters={filterParams} totalCount={totalCount} />
+                        <MapView filterParams={filterParams} totalCount={totalCount} />
+                        <ListingDisclaimer lastUpdated={new Date().toLocaleDateString('en-CA')} />
+                    </div>
                 </div>
-            </div>
+            </ListingsTermsGate>
         )
     }
 
@@ -69,6 +72,7 @@ export default async function ListingsPage({
     const totalPages = Math.ceil(totalCount / PAGE_SIZE)
 
     return (
+        <ListingsTermsGate>
         <div className="bg-gray-50 min-h-screen pt-24 pb-16">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <ListingSearch initialFilters={filterParams} resultCount={listings.length} totalCount={totalCount} />
@@ -110,5 +114,6 @@ export default async function ListingsPage({
                 <ListingDisclaimer lastUpdated={new Date().toLocaleDateString('en-CA')} />
             </div>
         </div>
+        </ListingsTermsGate>
     )
 }
