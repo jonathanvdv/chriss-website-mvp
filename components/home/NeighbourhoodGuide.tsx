@@ -10,56 +10,56 @@ export function NeighbourhoodGuide({ showHeader = true }: { showHeader?: boolean
             city: "Kitchener",
             desc: "Family-friendly streets, great schools, and some of the most sought-after homes in the city.",
             tags: ["Families", "Top Schools", "Move-Up Buyers"],
-            link: "/listings?city=Kitchener"
+            link: "/listings"
         },
         {
             name: "Doon",
             city: "Kitchener",
             desc: "Established, quiet, and close to the 401. A favourite for families and move-up buyers.",
             tags: ["Quiet", "Highway Access", "Families"],
-            link: "/listings?city=Kitchener"
+            link: "/listings"
         },
         {
             name: "Uptown Waterloo",
             city: "Waterloo",
             desc: "Vibrant, walkable, and growing fast. Perfect for young professionals and condo buyers.",
             tags: ["Walkable", "LRT Access", "Condos"],
-            link: "/listings?city=Waterloo"
+            link: "/listings"
         },
         {
             name: "Forest Heights",
             city: "Kitchener",
             desc: "Affordable, well-connected, and close to everything. A smart choice for first-time buyers.",
             tags: ["Affordable", "First-Time Buyers", "Central"],
-            link: "/listings?city=Kitchener"
+            link: "/listings"
         },
         {
             name: "Galt",
             city: "Cambridge",
             desc: "Historic charm, lower price points, and a community that's quietly becoming one of Ontario's best-kept secrets.",
             tags: ["Character Homes", "Value", "Grand River"],
-            link: "/listings?city=Cambridge"
+            link: "/listings"
         },
         {
             name: "Waterloo North",
             city: "Waterloo",
             desc: "Close to both universities, strong rental income potential, and a diverse, energetic community.",
             tags: ["Investment", "Universities", "Diverse"],
-            link: "/listings?city=Waterloo"
+            link: "/listings"
         },
     ]
 
     return (
-        <section className={`${showHeader ? 'py-24 md:py-32' : 'py-8 md:py-12'} bg-white relative`}>
+        <section className={`${showHeader ? 'py-12 md:py-20' : 'py-8 md:py-12'} bg-white relative`}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 {showHeader && (
-                    <AnimatedSection className="mb-16 md:mb-20">
+                    <AnimatedSection className="mb-16 md:mb-20 text-center">
                         <SectionLabel text="Explore the Region" />
                         <h2 className="font-display text-4xl md:text-5xl text-brand-text mb-6">
                             Find Your <span className="italic text-brand-accent">Neighbourhood</span>
                         </h2>
-                        <p className="max-w-2xl text-brand-text-muted text-lg leading-relaxed font-light">
+                        <p className="text-brand-text-muted text-lg leading-relaxed font-light">
                             Waterloo Region has a neighbourhood for every lifestyle. Here are the areas Abdul knows best.
                         </p>
                     </AnimatedSection>
@@ -103,7 +103,7 @@ export function NeighbourhoodGuide({ showHeader = true }: { showHeader?: boolean
 
                 <AnimatedSection className="mt-12 text-center">
                     <Link
-                        href="/neighbourhoods"
+                        href="/listings"
                         className="inline-block border border-brand-border hover:border-brand-accent text-brand-text hover:text-brand-accent font-medium px-8 py-4 uppercase tracking-wider text-sm transition-colors"
                     >
                         Explore All Neighbourhoods →

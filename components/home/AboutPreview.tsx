@@ -5,7 +5,7 @@ import { AnimatedSection } from '@/components/shared/AnimatedSection'
 
 export function AboutPreview() {
     return (
-        <section className="py-20 md:py-32 bg-white">
+        <section className="py-12 md:py-20 bg-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 lg:gap-20 items-center">
                     {/* Image Side */}

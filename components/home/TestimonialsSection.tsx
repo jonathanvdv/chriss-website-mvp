@@ -25,7 +25,7 @@ export function TestimonialsSection() {
     ]
 
     return (
-        <section className="py-20 md:py-32 bg-brand-bg-dark text-white relative border-y border-brand-border/20">
+        <section className="py-12 md:py-20 bg-brand-bg-dark text-white relative border-y border-brand-border/20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 <AnimatedSection className="text-center max-w-2xl mx-auto mb-16 md:mb-24">

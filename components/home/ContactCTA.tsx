@@ -3,7 +3,7 @@ import { AnimatedSection } from '@/components/shared/AnimatedSection'
 
 export function ContactCTA() {
     return (
-        <section className="bg-brand-bg-dark text-white py-24 md:py-32">
+        <section className="bg-brand-bg-dark text-white py-12 md:py-20">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
                 <AnimatedSection>
                     <h2 className="font-display text-4xl md:text-5xl lg:text-6xl mb-6">

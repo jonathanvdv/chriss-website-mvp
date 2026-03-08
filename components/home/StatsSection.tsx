@@ -43,7 +43,7 @@ function Counter({ end, suffix = '', prefix = '', label }: StatProps) {
 
 export function StatsSection() {
     return (
-        <section className="bg-brand-bg-dark text-white py-16 lg:py-24 border-y border-brand-border/20">
+        <section className="bg-brand-bg-dark text-white py-12 lg:py-16 border-y border-brand-border/20">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <AnimatedSection>
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-0 gap-y-12">

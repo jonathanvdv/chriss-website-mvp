@@ -37,7 +37,7 @@ export function WhyChooseAbdul() {
     ]
 
     return (
-        <section className="py-24 md:py-32 bg-white">
+        <section className="py-12 md:py-20 bg-white">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
                 <AnimatedSection className="text-center max-w-2xl mx-auto mb-20 md:mb-24">
