@@ -7,11 +7,23 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 // Simple in-memory rate limiter: max 5 submissions per IP per 15 minutes
 const RATE_LIMIT_MAX = 5
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const MAX_TRACKED_IPS = 10_000
 const ipHits = new Map<string, number[]>()
 
 function isRateLimited(ip: string): boolean {
     const now = Date.now()
     const hits = (ipHits.get(ip) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+
+    if (hits.length === 0) {
+        ipHits.delete(ip)
+    }
+
+    // Safety valve: evict oldest entries if map grows too large
+    if (ipHits.size >= MAX_TRACKED_IPS) {
+        const firstKey = ipHits.keys().next().value
+        if (firstKey) ipHits.delete(firstKey)
+    }
+
     if (hits.length >= RATE_LIMIT_MAX) return true
     hits.push(now)
     ipHits.set(ip, hits)
