@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterPins } from '../MapView'
+import { filterPins } from '@/lib/filter-pins'
 import type { MapPin } from '@/lib/listings'
 
 function makePin(overrides: Partial<MapPin> = {}): MapPin {

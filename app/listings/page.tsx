@@ -59,7 +59,7 @@ export default async function ListingsPage({
                 <div className="bg-gray-50 min-h-screen pt-24 pb-16">
                     <div className="px-4 sm:px-6">
                         <ListingSearch initialFilters={filterParams} totalCount={totalCount} />
-                        <MapViewLoader filterParams={filterParams} totalCount={totalCount} />
+                        <MapViewLoader filterParams={filterParams} />
                         <ListingDisclaimer lastUpdated={new Date().toLocaleDateString('en-CA')} />
                     </div>
                 </div>
