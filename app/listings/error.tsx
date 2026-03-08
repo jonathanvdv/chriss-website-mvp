@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 export default function ListingsError({
     error,
     reset,
@@ -7,6 +9,10 @@ export default function ListingsError({
     error: Error & { digest?: string }
     reset: () => void
 }) {
+    useEffect(() => {
+        console.error('Listings error:', error)
+    }, [error])
+
     return (
         <div className="bg-gray-50 min-h-screen pt-24 pb-16">
             <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
