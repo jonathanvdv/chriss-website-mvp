@@ -9,14 +9,14 @@
 
 ### Critical
 
-- **No server-side validation on `/api/contact`** -- Client-side Zod validation is easily bypassed. Malicious users can POST arbitrary data directly to the endpoint, consuming Resend email quota or sending malformed emails.
-- **HTML injection in email templates** (`app/api/contact/route.ts:56-100`) -- User input is interpolated directly into HTML email templates without escaping. A user submitting `<script>` tags or malicious HTML gets it rendered in the email.
-- **OData injection in listing filters** (`lib/listings.ts:171,174,209`) -- Filter values like `city` and `propertyType` are string-interpolated directly into OData queries without escaping. Crafted input could manipulate the query.
+- ~~**No server-side validation on `/api/contact`**~~ **FIXED** -- Added server-side Zod schema validation matching the client schema.
+- ~~**HTML injection in email templates**~~ **FIXED** -- All user input is now HTML-escaped before template interpolation.
+- ~~**OData injection in listing filters**~~ **FIXED** -- String values are now escaped with OData single-quote doubling.
 
 ### High
 
-- **No rate limiting on contact form API** -- Bots can spam the endpoint, exhausting Resend quota.
-- **No CSP headers configured** -- Increases XSS attack surface.
+- **No rate limiting on contact form API** -- Bots can spam the endpoint, exhausting Resend quota. Needs decision on approach (in-memory, Redis, Vercel edge middleware).
+- **No CSP headers configured** -- Increases XSS attack surface. Needs alignment on allowed external domains.
 - **Mapbox token has no domain restriction** -- `NEXT_PUBLIC_MAPBOX_TOKEN` is exposed to the client (required), but should be restricted to your domains in the Mapbox dashboard.
 
 ### Low
@@ -29,15 +29,15 @@
 
 ### Critical
 
-- **DDF API responses exceed 2MB Next.js cache limit** (`lib/listings.ts:getAllMapPins`) -- Map-pins endpoint fetches full property objects (~2MB+ per batch of 100) without `$select`, so Next.js cannot cache responses. **FIXED:** Added `$select` with only the 18 fields `normalizeDdfToPin` needs.
-- **Unoptimized static images** -- `abdul-photo-no-bg-v2.png` (1.2MB), `house-1.jpg` (750KB), `listing-placeholder.jpg` (718KB). These should be converted to WebP and compressed.
-- **Plain `<img>` tags instead of `next/image`** in `ListingMap.tsx`, `MapPinCard.tsx`, and `ListingDisclaimer.tsx` -- Missing lazy loading, sizing hints, and format optimization.
+- ~~**DDF API responses exceed 2MB Next.js cache limit**~~ **FIXED** -- Added `$select` with only the fields `normalizeDdfToPin` needs.
+- **Unoptimized static images** -- `abdul-photo-no-bg-v2.png` (1.2MB), `house-1.jpg` (750KB), `listing-placeholder.jpg` (718KB). Should be converted to WebP and compressed.
+- ~~**Plain `<img>` tags instead of `next/image`**~~ **FIXED** -- MapPinCard and ListingDisclaimer now use `next/image`. ListingMap popup images left as `<img>` (Mapbox detached DOM).
 
 ### High
 
-- **Mapbox GL not lazy-loaded** (`MapView.tsx`) -- ~500KB+ library imports at module level even on mobile where the map is hidden. Should use `next/dynamic` with `ssr: false`.
+- ~~**Mapbox GL not lazy-loaded**~~ **FIXED** -- MapView is now loaded via `next/dynamic` with `ssr: false`.
 - **Framer Motion loaded unconditionally** -- No `prefers-reduced-motion` check; animation library loads even when animations are disabled.
-- **Missing `<Suspense>` boundary** on home page (`app/page.tsx:19`) -- Comment mentions it but no actual Suspense wrapping for `FeaturedListings`.
+- ~~**Missing `<Suspense>` boundary**~~ **FIXED** -- FeaturedListings now wrapped in Suspense with skeleton fallback.
 
 ### Medium
 
@@ -51,29 +51,31 @@
 
 ### High
 
-- **Race condition in MapView** (`MapView.tsx:73`) -- `cancelled` flag set on unmount, but state can still be set on an unmounted component before the flag is checked.
-- **Non-null assertion on canvas context** (`ListingMap.tsx:82`) -- `ctx.getContext('2d')!` will throw if context is null.
-- **Missing error boundary on listings page** -- If `getListings()` throws in the server component, the entire page crashes with no fallback.
-- **Console warnings in production** (`lib/listings.ts:236,301`) -- `console.warn` statements leak configuration details.
+- ~~**Race condition in MapView**~~ **FIXED** -- Added proper `!r.ok` check before calling `r.json()` on the fetch response.
+- ~~**Non-null assertion on canvas context**~~ **FIXED** -- Added null guard with early return.
+- ~~**Missing error boundary on listings page**~~ **FIXED** -- Added `app/listings/error.tsx` with retry UI.
+- ~~**Console warnings in production**~~ **FIXED** -- Replaced with inline comments.
 
 ### Medium
 
-- **Invalid date handling** (`ListingCard.tsx:8`) -- `new Date(listing.listDate).getTime()` can return NaN for malformed dates.
+- ~~**Invalid date handling**~~ **FIXED** -- Added NaN guard for malformed listDate values.
 - **Generic alt text on images** (`ImageGallery.tsx:40`) -- "Property Photo 1" is not descriptive for accessibility.
 - **Inconsistent error response format** across API routes.
 - **MortgageCalculator** doesn't validate negative numbers or unreasonable interest rate ranges.
 
 ---
 
-## Recommended Priority Order
+## Remaining Items
 
-1. **Server-side validation + input sanitization** on `/api/contact` (security)
-2. **Escape user input in email templates** (security)
-3. **Escape OData filter values** in `lib/listings.ts` (security)
-4. **Optimize/compress static images** to WebP (performance)
-5. **Replace `<img>` with `next/image`** in map components (performance)
-6. **Lazy-load Mapbox GL** with `next/dynamic` (performance)
-7. **Add rate limiting** to contact API (security)
-8. **Add error boundary** for listings page (reliability)
-9. **Fix race condition** in MapView useEffect (bug)
-10. **Add Suspense boundary** for async data on home page (performance)
+### Needs external action
+- **Optimize static images** -- Convert to WebP and compress (requires imagemagick/sharp or manual optimization)
+- **Mapbox domain restriction** -- Configure in Mapbox dashboard
+- **CSP headers** -- Needs alignment on allowed external domains
+- **Rate limiting** -- Needs decision on approach
+
+### Low-priority code changes
+- Framer Motion `prefers-reduced-motion` check
+- Lazy-load MortgageCalculator on tool pages
+- Improve alt text in ImageGallery
+- Standardize API error response format
+- MortgageCalculator input validation bounds
