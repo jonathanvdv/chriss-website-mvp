@@ -1,9 +1,15 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { ReactNode } from 'react'
 
 export function AnimatedSection({ children, className = '' }: { children: ReactNode, className?: string }) {
+    const prefersReduced = useReducedMotion()
+
+    if (prefersReduced) {
+        return <div className={className}>{children}</div>
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 30 }}
