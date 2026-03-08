@@ -190,16 +190,18 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
                 )}
             </div>
 
-            {/* Map */}
-            <div className="hidden lg:block flex-1">
-                {loading ? (
-                    <div className="w-full h-full bg-gray-100 animate-pulse flex items-center justify-center text-gray-400 text-sm">
-                        Loading map...
-                    </div>
-                ) : (
-                    <ListingMap pins={filteredPins || []} onBoundsChange={handleBoundsChange} />
-                )}
-            </div>
+            {/* Map — only mounted on desktop to avoid Mapbox loading on mobile */}
+            {isDesktop && (
+                <div className="flex-1">
+                    {loading ? (
+                        <div className="w-full h-full bg-gray-100 animate-pulse flex items-center justify-center text-gray-400 text-sm">
+                            Loading map...
+                        </div>
+                    ) : (
+                        <ListingMap pins={filteredPins || []} onBoundsChange={handleBoundsChange} />
+                    )}
+                </div>
+            )}
         </div>
     )
 }
