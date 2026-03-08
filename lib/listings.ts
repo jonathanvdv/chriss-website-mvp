@@ -161,8 +161,6 @@ const SERVICE_AREA_CITIES = ['Kitchener', 'Waterloo', 'Cambridge', 'Guelph', 'Br
 function buildODataFilter(filters: ListingFilters): string {
     const parts: string[] = []
 
-    if (filters.minPrice) parts.push(`ListPrice ge ${filters.minPrice}`)
-    if (filters.maxPrice) parts.push(`ListPrice le ${filters.maxPrice}`)
     if (filters.beds) parts.push(`BedroomsTotal ge ${filters.beds}`)
     if (filters.baths) parts.push(`BathroomsTotalInteger ge ${filters.baths}`)
 
@@ -177,13 +175,34 @@ function buildODataFilter(filters: ListingFilters): string {
     if (filters.storeys) parts.push(`Stories ge ${filters.storeys}`)
     if (filters.yearBuilt) parts.push(`YearBuilt ge ${filters.yearBuilt}`)
 
-    // Transaction type filter
+    // Transaction type filtering
+    // Rentals: ListPrice is null, price is in TotalActualRent
+    // Sales: ListPrice has the value, TotalActualRent is null/0
     if (filters.transactionType === 'sale') {
         parts.push('ListPrice gt 0')
+        if (filters.minPrice) parts.push(`ListPrice ge ${filters.minPrice}`)
+        if (filters.maxPrice) parts.push(`ListPrice le ${filters.maxPrice}`)
     } else if (filters.transactionType === 'rent') {
         parts.push('TotalActualRent gt 0')
+        if (filters.minPrice) parts.push(`TotalActualRent ge ${filters.minPrice}`)
+        if (filters.maxPrice) parts.push(`TotalActualRent le ${filters.maxPrice}`)
     } else {
-        parts.push('(ListPrice gt 0 or TotalActualRent gt 0)')
+        // "All" — include sales and rentals, with proper price filtering on each field
+        if (filters.minPrice || filters.maxPrice) {
+            const saleParts = ['ListPrice gt 0']
+            const rentParts = ['TotalActualRent gt 0']
+            if (filters.minPrice) {
+                saleParts.push(`ListPrice ge ${filters.minPrice}`)
+                rentParts.push(`TotalActualRent ge ${filters.minPrice}`)
+            }
+            if (filters.maxPrice) {
+                saleParts.push(`ListPrice le ${filters.maxPrice}`)
+                rentParts.push(`TotalActualRent le ${filters.maxPrice}`)
+            }
+            parts.push(`((${saleParts.join(' and ')}) or (${rentParts.join(' and ')}))`)
+        } else {
+            parts.push('(ListPrice gt 0 or TotalActualRent gt 0)')
+        }
     }
 
     if (filters.city) {
@@ -256,8 +275,15 @@ export async function getListings(filters: ListingFilters = {}): Promise<{ listi
     }
 
     const data = await res.json()
-    const listings = (data.value || []).map(normalizeDdfListing)
+    let listings = (data.value || []).map(normalizeDdfListing)
     const totalCount = data['@odata.count'] ?? listings.length
+
+    // Post-fetch sort by price since rentals use TotalActualRent, not ListPrice
+    if (filters.sortField === 'listingPrice') {
+        const dir = filters.sortDirection || 'desc'
+        listings.sort((a: Listing, b: Listing) => dir === 'asc' ? a.price - b.price : b.price - a.price)
+    }
+
     return { listings, totalCount }
 }
 
