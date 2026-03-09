@@ -109,6 +109,8 @@ async function fetchAllDdfListings(): Promise<any[]> {
 
         if (!res.ok) {
             console.error(`DDF fetch error at skip=${skip}:`, res.status)
+            // Mark as partial so stale cleanup is skipped
+            ;(allListings as any).__partial = true
             break
         }
 
@@ -318,6 +320,13 @@ async function runImport(): Promise<void> {
                 errors++
                 if (errors <= 5) {
                     console.error(`  Error upserting ${raw.ListingKey}:`, err)
+                } else if (errors % 100 === 0) {
+                    console.error(`  ${errors} errors so far (suppressing individual logs)`)
+                }
+                // Abort early if the majority of upserts are failing
+                if (errors > 50 && success < errors) {
+                    console.error(`  Aborting: ${errors} errors vs ${success} successes — likely a systemic issue`)
+                    break
                 }
             }
         }
@@ -325,15 +334,22 @@ async function runImport(): Promise<void> {
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
         console.log(`  Import complete: ${success} upserted, ${errors} errors, ${elapsed}s elapsed`)
 
-        // Mark stale listings as inactive
-        const { count } = await supabase
-            .from('listings')
-            .update({ status: 'Inactive', updated_at: new Date().toISOString() })
-            .eq('status', 'Active')
-            .lt('ddf_last_synced', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+        // Only mark stale listings if we completed a full fetch (not partial)
+        // Use a 24-hour window to avoid false positives from slow imports
+        const isPartial = (listings as any).__partial === true
+        if (isPartial) {
+            console.log('  Skipping stale-listing cleanup (partial fetch)')
+        } else {
+            const STALE_WINDOW_MS = 24 * 60 * 60 * 1000 // 24 hours
+            const { count } = await supabase
+                .from('listings')
+                .update({ status: 'Inactive', updated_at: new Date().toISOString() })
+                .eq('status', 'Active')
+                .lt('ddf_last_synced', new Date(Date.now() - STALE_WINDOW_MS).toISOString())
 
-        if (count && count > 0) {
-            console.log(`  Marked ${count} stale listings as Inactive`)
+            if (count && count > 0) {
+                console.log(`  Marked ${count} stale listings as Inactive`)
+            }
         }
     } catch (err) {
         console.error('  Import failed:', err)
