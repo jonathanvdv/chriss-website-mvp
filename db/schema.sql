@@ -161,6 +161,18 @@ CREATE INDEX idx_listings_list_date ON listings (list_date DESC);
 CREATE INDEX idx_listings_agent_status ON listings (agent_id, status);
 CREATE INDEX idx_listings_office_status ON listings (office_id, status);
 
+-- ─── Row Level Security ──────────────────────────────────────────────────
+-- All listing data is public (read-only). Writes require the service role key.
+
+ALTER TABLE listings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE offices ENABLE ROW LEVEL SECURITY;
+
+-- Public read access (anon and authenticated roles)
+CREATE POLICY "listings_public_read" ON listings FOR SELECT USING (true);
+CREATE POLICY "agents_public_read" ON agents FOR SELECT USING (true);
+CREATE POLICY "offices_public_read" ON offices FOR SELECT USING (true);
+
 -- ─── RPC Functions ──────────────────────────────────────────────────────
 
 -- Update listing location via PostGIS (called from DDF importer)
@@ -176,6 +188,11 @@ BEGIN
     WHERE listing_key = p_listing_key;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Only the service role (postgres) should call this write function
+REVOKE EXECUTE ON FUNCTION update_listing_location FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION update_listing_location FROM anon;
+REVOKE EXECUTE ON FUNCTION update_listing_location FROM authenticated;
 
 -- Spatial query: find listings within a bounding box with optional filters
 CREATE OR REPLACE FUNCTION get_listings_in_bbox(
