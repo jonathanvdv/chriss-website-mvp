@@ -36,12 +36,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Cluster popup — remove Mapbox default padding */
-.cluster-popup-wrapper .mapboxgl-popup-content {
+/* Map popup styling */
+.maplibregl-popup-content {
   padding: 0 !important;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.maplibregl-popup-close-button {
+  font-size: 18px;
+  padding: 4px 8px;
+  color: #666;
+  z-index: 10;
+}
+
+.maplibregl-popup-close-button:hover {
+  color: #000;
+  background: transparent;
 }
 
 /* Custom Utilities for Premium Look */

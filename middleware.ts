@@ -9,11 +9,11 @@ export function middleware(request: NextRequest) {
 
     const csp = [
         "default-src 'self'",
-        `script-src 'self' 'nonce-${nonce}' https://api.mapbox.com https://cdn.mapbox.com`,
-        "style-src 'self' 'unsafe-inline' https://api.mapbox.com https://fonts.googleapis.com",
+        `script-src 'self' 'nonce-${nonce}'`,
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
-        "img-src 'self' data: blob: https://*.realtor.ca https://api.mapbox.com https://cdn.mapbox.com",
-        "connect-src 'self' https://api.mapbox.com https://*.mapbox.com https://events.mapbox.com https://ddfapi.realtor.ca",
+        "img-src 'self' data: blob: https://*.realtor.ca https://basemaps.cartocdn.com",
+        "connect-src 'self' https://basemaps.cartocdn.com https://ddfapi.realtor.ca",
         "worker-src 'self' blob:",
         "child-src 'self' blob: https://www.google.com",
         "frame-src https://www.google.com https://maps.google.com",

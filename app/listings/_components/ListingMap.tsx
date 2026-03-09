@@ -1,19 +1,42 @@
 'use client'
 
-import React, { useState, useCallback, useMemo, useRef } from 'react'
-import Map, { Source, Layer, Popup, NavigationControl } from 'react-map-gl/mapbox'
-import 'mapbox-gl/dist/mapbox-gl.css'
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import Map, { Source, Layer, Popup, NavigationControl, Marker } from 'react-map-gl/maplibre'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import type { MapPin } from '@/lib/listings'
 import Link from 'next/link'
-import type { MapRef } from 'react-map-gl/mapbox'
-import type { GeoJSONSource, MapLayerMouseEvent } from 'mapbox-gl'
+import type { MapRef } from 'react-map-gl/maplibre'
+import type { GeoJSONSource, MapLayerMouseEvent } from 'maplibre-gl'
 import { Bed, Bath, Maximize, ChevronLeft, ChevronRight } from 'lucide-react'
-
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+import Supercluster from 'supercluster'
 
 const DEFAULT_CENTER = { latitude: 43.45, longitude: -80.49 }
 const DEFAULT_ZOOM = 10
 const ACCENT = '#1B4332'
+
+// Clean, professional map style using free Carto tiles
+const MAP_STYLE = {
+    version: 8 as const,
+    sources: {
+        carto: {
+            type: 'raster' as const,
+            tiles: [
+                'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+            ],
+            tileSize: 256,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        },
+    },
+    layers: [
+        {
+            id: 'carto-tiles',
+            type: 'raster' as const,
+            source: 'carto',
+            minzoom: 0,
+            maxzoom: 20,
+        },
+    ],
+}
 
 export interface MapBounds {
     north: number
@@ -37,9 +60,14 @@ interface ClusterOverlayData {
 const LEAVES_PER_PAGE = 10
 const MAX_LEAVES = 200
 const OVERLAY_W = 370
-const OVERLAY_H = 340 // approximate height of overlay
 
 function formatPrice(price: number): string {
+    if (price >= 1000000) return `$${(price / 1000000).toFixed(1)}M`
+    if (price >= 1000) return `$${(price / 1000).toFixed(0)}K`
+    return `$${price.toLocaleString()}`
+}
+
+function formatPriceFull(price: number): string {
     return `$${price.toLocaleString()}`
 }
 
@@ -51,56 +79,7 @@ function formatDaysAgo(listDate: string): string {
     return `${days} days ago`
 }
 
-// ─── Create pin marker images ───────────────────────────────────────────
-
-function drawPinMarker(ctx: CanvasRenderingContext2D, w: number, h: number, color: string) {
-    const cx = w / 2
-    const headR = w / 2 - 1
-    const headCy = headR + 1
-    const tipY = h - 1
-
-    ctx.beginPath()
-    ctx.arc(cx, headCy, headR, Math.PI * 0.82, Math.PI * 0.18, false)
-    ctx.lineTo(cx, tipY)
-    ctx.closePath()
-    ctx.fillStyle = color
-    ctx.fill()
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 1.5
-    ctx.stroke()
-}
-
-function addMapImages(map: any) {
-    if (map.hasImage('pin-single')) return
-    const ratio = window.devicePixelRatio || 1
-
-    // Single listing pin
-    {
-        const w = 28, h = 38
-        const canvas = document.createElement('canvas')
-        canvas.width = w * ratio; canvas.height = h * ratio
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-        ctx.scale(ratio, ratio)
-        drawPinMarker(ctx, w, h, ACCENT)
-        ctx.beginPath(); ctx.arc(w / 2, w / 2, 4, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill()
-        map.addImage('pin-single', { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data }, { pixelRatio: ratio })
-    }
-
-    // Cluster pin
-    {
-        const w = 36, h = 46
-        const canvas = document.createElement('canvas')
-        canvas.width = w * ratio; canvas.height = h * ratio
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return
-        ctx.scale(ratio, ratio)
-        drawPinMarker(ctx, w, h, ACCENT)
-        map.addImage('pin-cluster', { width: canvas.width, height: canvas.height, data: ctx.getImageData(0, 0, canvas.width, canvas.height).data }, { pixelRatio: ratio })
-    }
-}
-
-// ─── Cluster Overlay Content (positioned via CSS, not Mapbox Popup) ─────
+// ─── Cluster Overlay Content ────────────────────────────────────────────
 
 function ClusterOverlay({
     data,
@@ -118,25 +97,21 @@ function ClusterOverlay({
     const totalPages = Math.ceil(data.leaves.length / LEAVES_PER_PAGE)
     const pageListings = data.leaves.slice(page * LEAVES_PER_PAGE, (page + 1) * LEAVES_PER_PAGE)
 
-    // Get the map container dimensions from the parent
     const parentEl = containerRef.current?.parentElement
     const mapW = parentEl?.clientWidth || 1000
     const mapH = parentEl?.clientHeight || 600
 
-    // 4-quadrant positioning: place overlay so it stays within the map
     const style: React.CSSProperties = { position: 'absolute', width: OVERLAY_W, zIndex: 50 }
     const pinX = data.screenX
     const pinY = data.screenY
     const GAP = 12
 
-    // Horizontal: if pin is in right half, place overlay to the left; otherwise to the right
     if (pinX > mapW / 2) {
         style.right = mapW - pinX + GAP
     } else {
         style.left = pinX + GAP
     }
 
-    // Vertical: if pin is in bottom half, grow upward; otherwise grow downward
     if (pinY > mapH / 2) {
         style.bottom = mapH - pinY + GAP
     } else {
@@ -152,14 +127,12 @@ function ClusterOverlay({
             onMouseLeave={onMouseLeave}
             onClick={(e) => e.stopPropagation()}
         >
-            {/* Header */}
             <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
                 <span className="text-sm font-semibold text-gray-900">
                     {data.totalCount.toLocaleString()} Listings
                 </span>
             </div>
 
-            {/* Scrollable listing cards — ~2 visible, scroll for more */}
             <div className="max-h-[260px] overflow-y-auto">
                 {pageListings.map((pin) => (
                     <Link
@@ -175,7 +148,7 @@ function ClusterOverlay({
                             )}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-brand-accent">{formatPrice(pin.price)}</p>
+                            <p className="text-sm font-bold text-brand-accent">{formatPriceFull(pin.price)}</p>
                             <p className="text-xs text-gray-600 mt-0.5 leading-snug truncate">{pin.address}</p>
                             <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5">
                                 <span className="flex items-center gap-1"><Bed className="w-3 h-3" /> {pin.beds}</span>
@@ -193,7 +166,6 @@ function ClusterOverlay({
                 ))}
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-3 px-3 py-2 border-t border-gray-200 bg-gray-50">
                     <button
@@ -217,60 +189,61 @@ function ClusterOverlay({
     )
 }
 
-// ─── Layer Styles ───────────────────────────────────────────────────────
+// ─── Pin Marker Component ───────────────────────────────────────────────
 
-const clusterIconLayer: any = {
-    id: 'clusters',
-    type: 'symbol',
-    source: 'listings',
-    filter: ['has', 'point_count'],
-    layout: {
-        'icon-image': 'pin-cluster',
-        'icon-size': 1,
-        'icon-anchor': 'bottom',
-        'icon-allow-overlap': true,
-        'text-field': '{point_count_abbreviated}',
-        'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-        'text-size': 12,
-        'text-anchor': 'center',
-        'text-offset': [0, -2.3],
-        'text-allow-overlap': true,
-        'icon-text-fit': 'none',
-    },
-    paint: { 'text-color': '#ffffff' },
+function PinMarker({ pin, onClick }: { pin: MapPin; onClick: (pin: MapPin) => void }) {
+    return (
+        <Marker
+            latitude={pin.lat}
+            longitude={pin.lng}
+            anchor="bottom"
+            onClick={(e) => { e.originalEvent.stopPropagation(); onClick(pin) }}
+        >
+            <div className="flex flex-col items-center cursor-pointer group">
+                <div className="bg-brand-accent text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md whitespace-nowrap group-hover:bg-brand-accent-light transition-colors">
+                    {formatPrice(pin.price)}
+                </div>
+                <div
+                    className="w-0 h-0 -mt-[1px]"
+                    style={{
+                        borderLeft: '5px solid transparent',
+                        borderRight: '5px solid transparent',
+                        borderTop: `5px solid var(--color-accent)`,
+                    }}
+                />
+            </div>
+        </Marker>
+    )
 }
 
-const unclusteredPointLayer: any = {
-    id: 'unclustered-point',
-    type: 'symbol',
-    source: 'listings',
-    filter: ['!', ['has', 'point_count']],
-    layout: {
-        'icon-image': 'pin-single',
-        'icon-size': 1,
-        'icon-anchor': 'bottom',
-        'icon-allow-overlap': true,
-    },
-}
-
-const unclusteredLabelLayer: any = {
-    id: 'unclustered-label',
-    type: 'symbol',
-    source: 'listings',
-    filter: ['!', ['has', 'point_count']],
-    layout: {
-        'text-field': ['get', 'priceLabel'],
-        'text-font': ['DIN Pro Medium', 'Arial Unicode MS Bold'],
-        'text-size': 11,
-        'text-offset': [0, -3.8],
-        'text-anchor': 'bottom',
-        'text-allow-overlap': false,
-    },
-    paint: {
-        'text-color': '#1f2937',
-        'text-halo-color': '#ffffff',
-        'text-halo-width': 1.5,
-    },
+function ClusterMarker({
+    count,
+    lat,
+    lng,
+    onClick,
+    onHover,
+    onLeave,
+}: {
+    count: number
+    lat: number
+    lng: number
+    onClick: () => void
+    onHover: (e: React.MouseEvent) => void
+    onLeave: () => void
+}) {
+    const size = count < 10 ? 36 : count < 100 ? 42 : 50
+    return (
+        <Marker latitude={lat} longitude={lng} anchor="center" onClick={(e) => { e.originalEvent.stopPropagation(); onClick() }}>
+            <div
+                className="rounded-full bg-brand-accent text-white flex items-center justify-center font-bold shadow-lg cursor-pointer hover:bg-brand-accent-light transition-colors border-2 border-white"
+                style={{ width: size, height: size, fontSize: count < 100 ? 13 : 11 }}
+                onMouseEnter={onHover}
+                onMouseLeave={onLeave}
+            >
+                {count.toLocaleString()}
+            </div>
+        </Marker>
+    )
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────
@@ -280,8 +253,26 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
     const mapContainerRef = useRef<HTMLDivElement>(null)
     const [selectedPin, setSelectedPin] = useState<MapPin | null>(null)
     const [clusterOverlay, setClusterOverlay] = useState<ClusterOverlayData | null>(null)
+    const [zoom, setZoom] = useState(DEFAULT_ZOOM)
+    const [mapBounds, setMapBounds] = useState<[number, number, number, number] | null>(null)
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const isOverOverlayRef = useRef(false)
+    const activeClusterIdRef = useRef<number | null>(null)
+
+    // Build Supercluster index
+    const supercluster = useMemo(() => {
+        const sc = new Supercluster({
+            radius: 60,
+            maxZoom: 16,
+        })
+        const points = pins.map(p => ({
+            type: 'Feature' as const,
+            properties: { id: p.id },
+            geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+        }))
+        sc.load(points)
+        return sc
+    }, [pins])
 
     const pinMap = useMemo(() => {
         const m: Record<string, MapPin> = {}
@@ -289,36 +280,27 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
         return m
     }, [pins])
 
-    const geojson = useMemo(() => ({
-        type: 'FeatureCollection' as const,
-        features: pins.map(p => ({
-            type: 'Feature' as const,
-            properties: {
-                id: p.id,
-                price: p.price,
-                priceLabel: formatPrice(p.price),
-                address: p.address,
-                beds: p.beds,
-                baths: p.baths,
-                sqft: p.sqft,
-                photo: p.photo,
-            },
-            geometry: {
-                type: 'Point' as const,
-                coordinates: [p.lng, p.lat],
-            },
-        })),
-    }), [pins])
+    // Get clusters for current viewport
+    const clusters = useMemo(() => {
+        if (!mapBounds) return []
+        try {
+            return supercluster.getClusters(mapBounds, Math.floor(zoom))
+        } catch {
+            return []
+        }
+    }, [supercluster, mapBounds, zoom])
 
     const fireBounds = useCallback((map: any) => {
-        if (!onBoundsChange) return
         const bounds = map.getBounds()
-        onBoundsChange({
+        const b = {
             north: bounds.getNorth(),
             south: bounds.getSouth(),
             east: bounds.getEast(),
             west: bounds.getWest(),
-        })
+        }
+        setMapBounds([b.west, b.south, b.east, b.north])
+        setZoom(map.getZoom())
+        onBoundsChange?.(b)
     }, [onBoundsChange])
 
     const handleMoveEnd = useCallback((evt: any) => {
@@ -327,35 +309,9 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
         activeClusterIdRef.current = null
     }, [fireBounds])
 
-    const activeClusterIdRef = useRef<number | null>(null)
-
-    const showClusterOverlay = useCallback((feature: any, point: { x: number; y: number }) => {
-        const map = mapRef.current?.getMap()
-        if (!map) return
-
-        const clusterId = feature.properties?.cluster_id
-        const pointCount = feature.properties?.point_count || 0
-
-        // If already showing this cluster, don't update position (prevents flickering)
-        if (activeClusterIdRef.current === clusterId) return
-        activeClusterIdRef.current = clusterId
-
-        const source = map.getSource('listings') as GeoJSONSource
-
-        source.getClusterLeaves(clusterId, Math.min(pointCount, MAX_LEAVES), 0, (err: any, leaves: any) => {
-            if (err || !leaves) return
-            const leafPins: MapPin[] = leaves.map((l: any) => pinMap[l.properties?.id]).filter(Boolean)
-            if (leafPins.length === 0) return
-
-            setClusterOverlay({
-                screenX: point.x,
-                screenY: point.y,
-                leaves: leafPins,
-                totalCount: pointCount,
-            })
-            setSelectedPin(null)
-        })
-    }, [pinMap])
+    const handleMapLoad = useCallback((evt: any) => {
+        fireBounds(evt.target)
+    }, [fireBounds])
 
     const clearClusterOverlay = useCallback(() => {
         hoverTimerRef.current = setTimeout(() => {
@@ -366,65 +322,38 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
         }, 250)
     }, [])
 
-    const handleMouseMove = useCallback((evt: MapLayerMouseEvent) => {
-        const map = mapRef.current?.getMap()
-        if (!map || !map.getLayer('clusters')) return
+    const handleClusterClick = useCallback((clusterId: number, lat: number, lng: number) => {
+        const expansionZoom = supercluster.getClusterExpansionZoom(clusterId)
+        mapRef.current?.getMap()?.easeTo({ center: [lng, lat], zoom: expansionZoom })
+        setClusterOverlay(null)
+        activeClusterIdRef.current = null
+    }, [supercluster])
+
+    const handleClusterHover = useCallback((e: React.MouseEvent, clusterId: number, pointCount: number) => {
+        if (activeClusterIdRef.current === clusterId) return
+        activeClusterIdRef.current = clusterId
 
         if (hoverTimerRef.current) {
             clearTimeout(hoverTimerRef.current)
             hoverTimerRef.current = null
         }
 
-        const clusterFeatures = map.queryRenderedFeatures(evt.point, { layers: ['clusters'] })
-        if (clusterFeatures.length > 0) {
-            showClusterOverlay(clusterFeatures[0], evt.point)
-        } else {
-            clearClusterOverlay()
-        }
-    }, [showClusterOverlay, clearClusterOverlay])
+        const leaves = supercluster.getLeaves(clusterId, Math.min(pointCount, MAX_LEAVES), 0)
+        const leafPins: MapPin[] = leaves.map((l: any) => pinMap[l.properties?.id]).filter(Boolean)
+        if (leafPins.length === 0) return
 
-    const handleClick = useCallback((evt: MapLayerMouseEvent) => {
-        const map = mapRef.current?.getMap()
-        if (!map || !map.getLayer('clusters')) return
+        const rect = mapContainerRef.current?.getBoundingClientRect()
+        const screenX = e.clientX - (rect?.left || 0)
+        const screenY = e.clientY - (rect?.top || 0)
 
-        const clusterFeatures = map.queryRenderedFeatures(evt.point, { layers: ['clusters'] })
-        if (clusterFeatures.length > 0) {
-            const feature = clusterFeatures[0]
-            const clusterId = feature.properties?.cluster_id
-            const source = map.getSource('listings') as GeoJSONSource
-            source.getClusterExpansionZoom(clusterId, (err: any, zoom: number | null | undefined) => {
-                if (err || zoom == null) return
-                map.easeTo({ center: (feature.geometry as any).coordinates, zoom })
-            })
-            setClusterOverlay(null)
-            activeClusterIdRef.current = null
-            return
-        }
-
-        const pointFeatures = map.getLayer('unclustered-point') ? map.queryRenderedFeatures(evt.point, { layers: ['unclustered-point'] }) : []
-        if (pointFeatures.length > 0) {
-            const props = pointFeatures[0].properties
-            if (!props) return
-            const pin = pinMap[props.id]
-            if (pin) {
-                setSelectedPin(pin)
-                setClusterOverlay(null)
-            }
-        }
-    }, [pinMap])
-
-    const handleMapLoad = useCallback((evt: any) => {
-        addMapImages(evt.target)
-        fireBounds(evt.target)
-    }, [fireBounds])
-
-    if (!MAPBOX_TOKEN) {
-        return (
-            <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
-                Map requires NEXT_PUBLIC_MAPBOX_TOKEN
-            </div>
-        )
-    }
+        setClusterOverlay({
+            screenX,
+            screenY,
+            leaves: leafPins,
+            totalCount: pointCount,
+        })
+        setSelectedPin(null)
+    }, [supercluster, pinMap])
 
     return (
         <div ref={mapContainerRef} className="relative w-full h-full">
@@ -432,31 +361,43 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
                 ref={mapRef}
                 initialViewState={{ ...DEFAULT_CENTER, zoom: DEFAULT_ZOOM }}
                 style={{ width: '100%', height: '100%' }}
-                mapStyle="mapbox://styles/mapbox/streets-v12"
-                mapboxAccessToken={MAPBOX_TOKEN}
+                mapStyle={MAP_STYLE as any}
                 onMoveEnd={handleMoveEnd}
-                onMouseMove={handleMouseMove}
-                onClick={handleClick}
                 onLoad={handleMapLoad}
-                interactiveLayerIds={['clusters', 'unclustered-point']}
-                cursor="pointer"
+                onClick={() => { setSelectedPin(null); setClusterOverlay(null) }}
             >
                 <NavigationControl position="top-right" />
 
-                <Source
-                    id="listings"
-                    type="geojson"
-                    data={geojson}
-                    cluster={true}
-                    clusterMaxZoom={14}
-                    clusterRadius={50}
-                >
-                    <Layer {...clusterIconLayer} />
-                    <Layer {...unclusteredPointLayer} />
-                    <Layer {...unclusteredLabelLayer} />
-                </Source>
+                {clusters.map((feature) => {
+                    const [lng, lat] = feature.geometry.coordinates
+                    const props = feature.properties
 
-                {/* Single pin popup — still uses Mapbox Popup */}
+                    if (props.cluster) {
+                        return (
+                            <ClusterMarker
+                                key={`cluster-${props.cluster_id}`}
+                                count={props.point_count}
+                                lat={lat}
+                                lng={lng}
+                                onClick={() => handleClusterClick(props.cluster_id, lat, lng)}
+                                onHover={(e) => handleClusterHover(e, props.cluster_id, props.point_count)}
+                                onLeave={clearClusterOverlay}
+                            />
+                        )
+                    }
+
+                    const pin = pinMap[props.id]
+                    if (!pin) return null
+
+                    return (
+                        <PinMarker
+                            key={pin.id}
+                            pin={pin}
+                            onClick={setSelectedPin}
+                        />
+                    )
+                })}
+
                 {selectedPin && !clusterOverlay && (
                     <Popup
                         latitude={selectedPin.lat}
@@ -471,7 +412,7 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
                             {selectedPin.photo && (
                                 <img src={selectedPin.photo} alt={selectedPin.address} className="w-full h-28 object-cover rounded mb-2" />
                             )}
-                            <p className="font-bold text-sm text-brand-accent">{formatPrice(selectedPin.price)}</p>
+                            <p className="font-bold text-sm text-brand-accent">{formatPriceFull(selectedPin.price)}</p>
                             <p className="text-xs text-gray-600 mt-0.5 leading-snug">{selectedPin.address}</p>
                             <p className="text-xs text-gray-500 mt-0.5">
                                 {selectedPin.beds} bed · {selectedPin.baths} bath
@@ -485,7 +426,6 @@ export function ListingMap({ pins, onBoundsChange }: ListingMapProps) {
                 )}
             </Map>
 
-            {/* Cluster overlay — positioned via CSS quadrant logic, always within map bounds */}
             {clusterOverlay && (
                 <ClusterOverlay
                     data={clusterOverlay}
