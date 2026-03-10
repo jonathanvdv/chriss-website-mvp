@@ -2,7 +2,7 @@ import { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
-import { TestimonialsSection } from '@/components/home/TestimonialsSection'
+import { TestimonialsSection } from '@/app/_components/TestimonialsSection'
 
 export const metadata: Metadata = {
     title: 'About Abdul Basharmal | REALTOR® Waterloo Region',
@@ -16,7 +16,7 @@ export default function AboutPage() {
             {/* Hero */}
             <section className="relative h-[60vh] min-h-[500px] flex flex-col items-center justify-center">
                 <Image
-                    src="/images/abdul-photo-no-bg-v2.png"
+                    src="/images/abdul-photo-no-bg-v2.webp"
                     alt="Abdul Basharmal"
                     fill
                     priority

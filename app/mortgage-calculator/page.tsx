@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
-import { MortgageCalculator } from '@/components/shared/MortgageCalculator'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
-import { SectionLabel } from '@/components/shared/SectionLabel'
+import { MortgageCalculatorLoader } from '@/components/MortgageCalculatorLoader'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
+import { SectionLabel } from '@/components/ui/SectionLabel'
 import Link from 'next/link'
 import { DollarSign, ShieldCheck, Clock, TrendingUp, Home, Landmark, BookOpen, Lightbulb } from 'lucide-react'
 
@@ -150,7 +150,7 @@ export default function MortgageCalculatorPage() {
                                 Mortgage <span className="italic">Calculator</span>
                             </h2>
                         </div>
-                        <MortgageCalculator />
+                        <MortgageCalculatorLoader />
                     </AnimatedSection>
                 </div>
             </section>

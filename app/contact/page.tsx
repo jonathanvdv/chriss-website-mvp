@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Image from 'next/image'
-import { ContactForm } from '@/components/shared/ContactForm'
+import { ContactForm } from '@/components/ContactForm'
 import { Facebook, Instagram, Linkedin, MapPin, Phone, Mail } from 'lucide-react'
 
 export const metadata: Metadata = {

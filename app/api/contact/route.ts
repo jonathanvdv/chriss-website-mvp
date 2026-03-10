@@ -1,17 +1,102 @@
 import { Resend } from 'resend'
+import { headers } from 'next/headers'
+import { contactSchema, escapeHtml } from '@/lib/contact-utils'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+// Simple in-memory rate limiter: max 5 submissions per IP per 15 minutes
+const RATE_LIMIT_MAX = 5
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const MAX_TRACKED_IPS = 10_000
+const ipHits = new Map<string, number[]>()
+let cleanupCounter = 0
+const CLEANUP_INTERVAL = 100 // sweep stale entries every N requests
+
+/** Remove expired entries. Safe to call during iteration: .set() on existing keys
+ *  does not add new entries, and .delete() removes the current key. */
+function sweepStaleEntries(): void {
+    const now = Date.now()
+    for (const [ip, hits] of ipHits) {
+        const active = hits.filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+        if (active.length === 0) {
+            ipHits.delete(ip)
+        } else {
+            ipHits.set(ip, active)
+        }
+    }
+}
+
+function isRateLimited(ip: string): boolean {
+    const now = Date.now()
+
+    // Periodically sweep stale entries to prevent unbounded growth
+    if (++cleanupCounter >= CLEANUP_INTERVAL) {
+        cleanupCounter = 0
+        sweepStaleEntries()
+    }
+
+    const hits = (ipHits.get(ip) || []).filter(t => now - t < RATE_LIMIT_WINDOW_MS)
+
+    if (hits.length === 0) {
+        ipHits.delete(ip)
+    }
+
+    // Safety valve: evict oldest entry if map grows too large
+    if (ipHits.size >= MAX_TRACKED_IPS) {
+        const firstKey = ipHits.keys().next().value
+        if (firstKey) ipHits.delete(firstKey)
+    }
+
+    if (hits.length >= RATE_LIMIT_MAX) return true
+    hits.push(now)
+    ipHits.set(ip, hits)
+    return false
+}
+
 export async function POST(request: Request) {
     try {
+        const headersList = await headers()
+        const ip = headersList.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+
+        if (isRateLimited(ip)) {
+            return Response.json(
+                { success: false, error: 'Too many requests. Please try again later.' },
+                { status: 429 }
+            )
+        }
+
         const body = await request.json()
-        const { firstName, lastName, email, phone, message, intent, language, listingAddress } = body
+        const result = contactSchema.safeParse(body)
+
+        if (!result.success) {
+            return Response.json(
+                { success: false, error: 'Invalid form data', details: result.error.flatten().fieldErrors },
+                { status: 400 }
+            )
+        }
+
+        const { firstName, lastName, email, phone, message, intent, language, listingAddress } = result.data
+
+        const recipient = process.env.CONTACT_FORM_RECIPIENT
+        if (!recipient) {
+            console.error('CONTACT_FORM_RECIPIENT env var is not configured')
+            return Response.json({ success: false, error: 'Contact form is not configured' }, { status: 500 })
+        }
+
+        const safeFirstName = escapeHtml(firstName)
+        const safeLastName = escapeHtml(lastName)
+        const safeEmail = escapeHtml(email)
+        const safePhone = phone ? escapeHtml(phone) : ''
+        const safeMessage = escapeHtml(message)
+        const safeIntent = intent ? escapeHtml(intent) : ''
+        const safeLanguage = language ? escapeHtml(language) : ''
+        const safeListingAddress = listingAddress ? escapeHtml(listingAddress) : ''
 
         const { error } = await resend.emails.send({
             from: 'Abdul Basharmal <no-reply@abdulsellshomes.com>',
-            to: 'jonvan225@gmail.com',
+            to: recipient,
             replyTo: email,
-            subject: `New ${intent || 'Contact'} Inquiry from ${firstName} ${lastName}`,
+            subject: `New ${safeIntent || 'Contact'} Inquiry from ${safeFirstName} ${safeLastName}`,
             html: `
 <!DOCTYPE html>
 <html>
@@ -38,7 +123,7 @@ export async function POST(request: Request) {
 <!-- Title -->
 <tr>
 <td style="padding:32px 40px 16px;">
-<h2 style="margin:0;color:#1a1a1a;font-size:18px;font-weight:400;letter-spacing:1px;">New ${intent || 'Contact'} Inquiry</h2>
+<h2 style="margin:0;color:#1a1a1a;font-size:18px;font-weight:400;letter-spacing:1px;">New ${safeIntent || 'Contact'} Inquiry</h2>
 <p style="margin:8px 0 0;color:#888;font-size:12px;font-family:Arial,Helvetica,sans-serif;">Received from your website</p>
 </td>
 </tr>
@@ -53,37 +138,37 @@ export async function POST(request: Request) {
 <tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Name</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${firstName} ${lastName}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeFirstName} ${safeLastName}</span>
 </td>
 </tr>
 <tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Email</span><br>
-<a href="mailto:${email}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${email}</a>
+<a href="mailto:${safeEmail}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${safeEmail}</a>
 </td>
 </tr>
-${phone ? `<tr>
+${safePhone ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Phone</span><br>
-<a href="tel:${phone}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${phone}</a>
+<a href="tel:${safePhone}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${safePhone}</a>
 </td>
 </tr>` : ''}
-${intent ? `<tr>
+${safeIntent ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Interest</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${intent}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeIntent}</span>
 </td>
 </tr>` : ''}
-${language ? `<tr>
+${safeLanguage ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Preferred Language</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${language}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeLanguage}</span>
 </td>
 </tr>` : ''}
-${listingAddress ? `<tr>
+${safeListingAddress ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Listing Address</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${listingAddress}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeListingAddress}</span>
 </td>
 </tr>` : ''}
 </table>
@@ -97,14 +182,14 @@ ${listingAddress ? `<tr>
 <tr>
 <td style="padding:24px 40px 32px;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Message</span>
-<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${message}</p>
+<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${safeMessage}</p>
 </td>
 </tr>
 
 <!-- Reply CTA -->
 <tr>
 <td style="padding:0 40px 36px;" align="center">
-<a href="mailto:${email}" style="display:inline-block;background-color:#1a1a1a;color:#ffffff;font-size:13px;font-family:Arial,Helvetica,sans-serif;letter-spacing:2px;text-decoration:none;padding:14px 36px;border-radius:2px;">REPLY TO ${firstName.toUpperCase()}</a>
+<a href="mailto:${safeEmail}" style="display:inline-block;background-color:#1a1a1a;color:#ffffff;font-size:13px;font-family:Arial,Helvetica,sans-serif;letter-spacing:2px;text-decoration:none;padding:14px 36px;border-radius:2px;">REPLY TO ${safeFirstName.toUpperCase()}</a>
 </td>
 </tr>
 

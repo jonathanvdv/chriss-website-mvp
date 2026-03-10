@@ -1,13 +1,14 @@
-import { HeroSection } from '@/components/home/HeroSection'
-import { StatsSection } from '@/components/home/StatsSection'
-import { FeaturedListings } from '@/components/home/FeaturedListings'
-import { AboutPreview } from '@/components/home/AboutPreview'
-import { WhyChooseAbdul } from '@/components/home/WhyChooseAbdul'
-import { NeighbourhoodGuide } from '@/components/home/NeighbourhoodGuide'
-import { TestimonialsSection } from '@/components/home/TestimonialsSection'
-import { ContactCTA } from '@/components/home/ContactCTA'
-import { ContactForm } from '@/components/shared/ContactForm'
+import { HeroSection } from './_components/HeroSection'
+import { StatsSection } from './_components/StatsSection'
+import { FeaturedListings } from './_components/FeaturedListings'
+import { AboutPreview } from './_components/AboutPreview'
+import { WhyChooseAbdul } from './_components/WhyChooseAbdul'
+import { NeighbourhoodGuide } from './_components/NeighbourhoodGuide'
+import { TestimonialsSection } from './_components/TestimonialsSection'
+import { ContactCTA } from './_components/ContactCTA'
+import { ContactForm } from '@/components/ContactForm'
 import { Facebook, Instagram, Linkedin } from 'lucide-react'
+import { Suspense } from 'react'
 
 export default function Home() {
   return (
@@ -15,8 +16,26 @@ export default function Home() {
       <HeroSection />
       <StatsSection />
 
-      {/* Featured Listings - wrapped in Suspense for async data */}
-      <FeaturedListings />
+      <Suspense fallback={
+        <section className="py-12 md:py-20 bg-brand-bg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="bg-white border border-brand-border/30 rounded-sm animate-pulse">
+                  <div className="h-52 bg-gray-100" />
+                  <div className="p-5 space-y-3">
+                    <div className="h-5 bg-gray-100 rounded w-1/3" />
+                    <div className="h-4 bg-gray-100 rounded w-2/3" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      }>
+        <FeaturedListings />
+      </Suspense>
 
       <WhyChooseAbdul />
       <AboutPreview />

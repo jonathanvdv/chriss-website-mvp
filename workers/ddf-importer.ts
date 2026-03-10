@@ -29,6 +29,7 @@ const DDF_CLIENT_ID = process.env.DDF_CLIENT_ID || ''
 const DDF_CLIENT_SECRET = process.env.DDF_CLIENT_SECRET || ''
 const IMPORT_INTERVAL_MS = 10 * 60 * 1000
 const BATCH_SIZE = 100
+const UPSERT_BATCH_SIZE = 50
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required')
@@ -84,13 +85,19 @@ function normalizeStatus(status: string): string {
     return 'Active'
 }
 
+interface FetchResult {
+    listings: any[]
+    partial: boolean
+}
+
 // ─── Fetch Listings from DDF ──────────────────────────────────────────────
 
-async function fetchAllDdfListings(): Promise<any[]> {
+async function fetchAllDdfListings(): Promise<FetchResult> {
     const token = await getDdfToken()
     const allListings: any[] = []
     let skip = 0
     let total = Infinity
+    let partial = false
 
     const filter = "(City eq 'Kitchener' or City eq 'Waterloo' or City eq 'Cambridge' or City eq 'Guelph' or City eq 'Brampton' or City eq 'Mississauga' or City eq 'Toronto') and (ListPrice gt 0 or TotalActualRent gt 0)"
 
@@ -109,6 +116,7 @@ async function fetchAllDdfListings(): Promise<any[]> {
 
         if (!res.ok) {
             console.error(`DDF fetch error at skip=${skip}:`, res.status)
+            partial = true
             break
         }
 
@@ -126,60 +134,83 @@ async function fetchAllDdfListings(): Promise<any[]> {
         console.log(`  Fetched ${allListings.length}/${total} listings...`)
     }
 
-    return allListings
+    return { listings: allListings, partial }
 }
 
-// ─── Upsert into Supabase ─────────────────────────────────────────────────
+// ─── Batch Upsert into Supabase ──────────────────────────────────────────
 
-async function ensureAgent(agentKey: string): Promise<number> {
-    // Try to find existing
+async function ensureAgentsBatch(agentKeys: string[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>()
+    if (agentKeys.length === 0) return map
+
+    // Fetch existing agents
     const { data: existing } = await supabase
         .from('agents')
-        .select('id')
-        .eq('agent_key', agentKey)
-        .single()
+        .select('id, agent_key')
+        .in('agent_key', agentKeys)
 
-    if (existing) return existing.id
+    for (const row of existing || []) {
+        map.set(row.agent_key, row.id)
+    }
 
-    // Insert new
-    const { data, error } = await supabase
-        .from('agents')
-        .upsert({ agent_key: agentKey, updated_at: new Date().toISOString() }, { onConflict: 'agent_key' })
-        .select('id')
-        .single()
+    // Upsert missing agents
+    const missing = agentKeys.filter(k => !map.has(k))
+    if (missing.length > 0) {
+        const rows = missing.map(k => ({ agent_key: k, updated_at: new Date().toISOString() }))
+        const { data, error } = await supabase
+            .from('agents')
+            .upsert(rows, { onConflict: 'agent_key' })
+            .select('id, agent_key')
 
-    if (error) throw error
-    return data!.id
+        if (error) console.error('Agent batch upsert error:', error)
+        for (const row of data || []) {
+            map.set(row.agent_key, row.id)
+        }
+    }
+
+    return map
 }
 
-async function ensureOffice(officeKey: string, officeName?: string): Promise<number> {
+async function ensureOfficesBatch(offices: Map<string, string | undefined>): Promise<Map<string, number>> {
+    const map = new Map<string, number>()
+    const keys = [...offices.keys()]
+    if (keys.length === 0) return map
+
+    // Fetch existing offices
     const { data: existing } = await supabase
         .from('offices')
-        .select('id')
-        .eq('office_key', officeKey)
-        .single()
+        .select('id, office_key')
+        .in('office_key', keys)
 
-    if (existing) return existing.id
+    for (const row of existing || []) {
+        map.set(row.office_key, row.id)
+    }
 
-    const { data, error } = await supabase
-        .from('offices')
-        .upsert(
-            { office_key: officeKey, name: officeName || officeKey, updated_at: new Date().toISOString() },
-            { onConflict: 'office_key' }
-        )
-        .select('id')
-        .single()
+    // Upsert missing offices
+    const missing = keys.filter(k => !map.has(k))
+    if (missing.length > 0) {
+        const rows = missing.map(k => ({
+            office_key: k,
+            name: offices.get(k) || k,
+            updated_at: new Date().toISOString(),
+        }))
+        const { data, error } = await supabase
+            .from('offices')
+            .upsert(rows, { onConflict: 'office_key' })
+            .select('id, office_key')
 
-    if (error) throw error
-    return data!.id
+        if (error) console.error('Office batch upsert error:', error)
+        for (const row of data || []) {
+            map.set(row.office_key, row.id)
+        }
+    }
+
+    return map
 }
 
-async function upsertListing(raw: any): Promise<void> {
-    let agentId: number | null = null
-    let officeId: number | null = null
-
-    if (raw.ListAgentKey) agentId = await ensureAgent(raw.ListAgentKey)
-    if (raw.ListOfficeKey) officeId = await ensureOffice(raw.ListOfficeKey, raw.ListOfficeName)
+function buildListingRow(raw: any, agentMap: Map<string, number>, officeMap: Map<string, number>): Record<string, any> {
+    const agentId = raw.ListAgentKey ? agentMap.get(raw.ListAgentKey) ?? null : null
+    const officeId = raw.ListOfficeKey ? officeMap.get(raw.ListOfficeKey) ?? null : null
 
     const streetNum = raw.StreetNumber || ''
     const streetName = raw.StreetName || ''
@@ -206,11 +237,7 @@ async function upsertListing(raw: any): Promise<void> {
         description: r.RoomDescription || '',
     }))
 
-    const lat = raw.Latitude
-    const lng = raw.Longitude
-
-    // Build the row for upsert (without location — PostGIS needs raw SQL)
-    const row: Record<string, any> = {
+    return {
         listing_key: raw.ListingKey,
         mls_number: raw.ListingId || raw.ListingKey,
         agent_id: agentId,
@@ -265,7 +292,7 @@ async function upsertListing(raw: any): Promise<void> {
         tax_year: raw.TaxYear ?? null,
         association_fee: raw.AssociationFee ?? null,
         association_fee_frequency: raw.AssociationFeeFrequency || null,
-        rooms: JSON.stringify(rooms),
+        rooms,
         rooms_total: raw.RoomsTotal ?? null,
         zoning: raw.Zoning || raw.ZoningDescription || null,
         community_features: ddfStr(raw.CommunityFeatures),
@@ -278,22 +305,6 @@ async function upsertListing(raw: any): Promise<void> {
         ddf_last_synced: new Date().toISOString(),
         updated_at: new Date().toISOString(),
     }
-
-    // Upsert the row (without location)
-    const { error } = await supabase
-        .from('listings')
-        .upsert(row, { onConflict: 'listing_key' })
-
-    if (error) throw error
-
-    // Update location separately using raw SQL via RPC
-    if (lat && lng) {
-        await supabase.rpc('update_listing_location', {
-            p_listing_key: raw.ListingKey,
-            p_lat: lat,
-            p_lng: lng,
-        })
-    }
 }
 
 // ─── Main Import Loop ─────────────────────────────────────────────────────
@@ -303,37 +314,88 @@ async function runImport(): Promise<void> {
     console.log(`[${new Date().toISOString()}] Starting DDF import...`)
 
     try {
-        const listings = await fetchAllDdfListings()
+        const { listings, partial } = await fetchAllDdfListings()
         console.log(`  Fetched ${listings.length} listings from DDF`)
+
+        // Collect unique agent and office keys
+        const agentKeys = new Set<string>()
+        const officeEntries = new Map<string, string | undefined>()
+        for (const raw of listings) {
+            if (raw.ListAgentKey) agentKeys.add(raw.ListAgentKey)
+            if (raw.ListOfficeKey) officeEntries.set(raw.ListOfficeKey, raw.ListOfficeName)
+        }
+
+        // Batch upsert agents and offices
+        const agentMap = await ensureAgentsBatch([...agentKeys])
+        const officeMap = await ensureOfficesBatch(officeEntries)
+        console.log(`  Resolved ${agentMap.size} agents, ${officeMap.size} offices`)
 
         let success = 0
         let errors = 0
 
-        for (const raw of listings) {
+        // Batch upsert listings
+        for (let i = 0; i < listings.length; i += UPSERT_BATCH_SIZE) {
+            const batch = listings.slice(i, i + UPSERT_BATCH_SIZE)
+            const rows = batch.map(raw => buildListingRow(raw, agentMap, officeMap))
+
             try {
-                await upsertListing(raw)
-                success++
-                if (success % 50 === 0) console.log(`  Upserted ${success}/${listings.length}...`)
+                const { error } = await supabase
+                    .from('listings')
+                    .upsert(rows, { onConflict: 'listing_key' })
+
+                if (error) throw error
+                success += batch.length
             } catch (err) {
-                errors++
-                if (errors <= 5) {
-                    console.error(`  Error upserting ${raw.ListingKey}:`, err)
+                errors += batch.length
+                if (errors <= 5 * UPSERT_BATCH_SIZE) {
+                    console.error(`  Error upserting batch at index ${i}:`, err)
                 }
+                if (errors > 50 && success < errors) {
+                    console.error(`  Aborting: ${errors} errors vs ${success} successes -- likely a systemic issue`)
+                    break
+                }
+                continue
+            }
+
+            // TODO: location updates are still sequential per listing.
+            // Consider a batch RPC or trigger to reduce round trips.
+            for (const raw of batch) {
+                if (raw.Latitude && raw.Longitude) {
+                    try {
+                        await supabase.rpc('update_listing_location', {
+                            p_listing_key: raw.ListingKey,
+                            p_lat: raw.Latitude,
+                            p_lng: raw.Longitude,
+                        })
+                    } catch (err) {
+                        console.error(`  Location update failed for ${raw.ListingKey}:`, err)
+                    }
+                }
+            }
+
+            if (success % 200 === 0 || i + UPSERT_BATCH_SIZE >= listings.length) {
+                console.log(`  Upserted ${success}/${listings.length}...`)
             }
         }
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
         console.log(`  Import complete: ${success} upserted, ${errors} errors, ${elapsed}s elapsed`)
 
-        // Mark stale listings as inactive
-        const { count } = await supabase
-            .from('listings')
-            .update({ status: 'Inactive', updated_at: new Date().toISOString() })
-            .eq('status', 'Active')
-            .lt('ddf_last_synced', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+        // Only mark stale listings if we completed a full fetch (not partial)
+        // Use a 24-hour window to avoid false positives from slow imports
+        if (partial) {
+            console.log('  Skipping stale-listing cleanup (partial fetch)')
+        } else {
+            const STALE_WINDOW_MS = 24 * 60 * 60 * 1000 // 24 hours
+            const { count } = await supabase
+                .from('listings')
+                .update({ status: 'Inactive', updated_at: new Date().toISOString() })
+                .eq('status', 'Active')
+                .lt('ddf_last_synced', new Date(Date.now() - STALE_WINDOW_MS).toISOString())
 
-        if (count && count > 0) {
-            console.log(`  Marked ${count} stale listings as Inactive`)
+            if (count && count > 0) {
+                console.log(`  Marked ${count} stale listings as Inactive`)
+            }
         }
     } catch (err) {
         console.error('  Import failed:', err)

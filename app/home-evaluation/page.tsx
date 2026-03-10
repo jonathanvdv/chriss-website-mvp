@@ -1,7 +1,7 @@
 import { Metadata } from 'next'
-import { AnimatedSection } from '@/components/shared/AnimatedSection'
-import { SectionLabel } from '@/components/shared/SectionLabel'
-import { ContactForm } from '@/components/shared/ContactForm'
+import { AnimatedSection } from '@/components/ui/AnimatedSection'
+import { SectionLabel } from '@/components/ui/SectionLabel'
+import { ContactForm } from '@/components/ContactForm'
 
 export const metadata: Metadata = {
     title: 'Free Home Evaluation | Abdul Basharmal — RE/MAX Twin City',

@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/db'
 
+const VALID_STATUSES = new Set(['Active', 'Sold', 'Pending'])
+const VALID_TRANSACTION_TYPES = new Set(['sale', 'rent'])
+const VALID_PROPERTY_TYPES = new Set([
+    'House',
+    'Apartment',
+    'Row / Townhouse',
+    'Duplex',
+    'Triplex',
+    'Fourplex',
+    'Mobile Home',
+    'Manufactured Home/Mobile',
+    'Land',
+    'Residential',
+    'Commercial',
+    'Vacant Land',
+])
+
+function safeNum(value: string | null): number | undefined {
+    if (value == null || value === '') return undefined
+    const n = Number(value)
+    return Number.isFinite(n) ? n : undefined
+}
+
+const KEY_PATTERN = /^[a-zA-Z0-9_-]{1,50}$/
+
 /**
  * GET /api/listings?bbox=lng1,lat1,lng2,lat2&agent_id=123
  *
@@ -30,59 +55,81 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'bbox parameter is required (west,south,east,north)' }, { status: 400 })
     }
 
-    const [west, south, east, north] = bbox.split(',').map(Number)
-    if ([west, south, east, north].some(isNaN)) {
+    const parts = bbox.split(',').map(Number)
+    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
         return NextResponse.json({ error: 'Invalid bbox format. Expected: west,south,east,north' }, { status: 400 })
     }
 
-    const rpcParams: Record<string, any> = {
+    const [west, south, east, north] = parts
+
+    if (south < -90 || north > 90 || west < -180 || east > 180 || south >= north) {
+        return NextResponse.json({ error: 'Invalid bbox coordinates' }, { status: 400 })
+    }
+
+    const rpcParams: Record<string, string | number | boolean> = {
         bbox_west: west,
         bbox_south: south,
         bbox_east: east,
         bbox_north: north,
     }
 
-    const agentId = params.get('agent_id')
-    const officeId = params.get('office_id')
+    const agentId = safeNum(params.get('agent_id'))
+    const officeId = safeNum(params.get('office_id'))
+    if (agentId) rpcParams.filter_agent_id = agentId
+    if (officeId) rpcParams.filter_office_id = officeId
+
     const agentKey = params.get('agent_key')
     const officeKey = params.get('office_key')
-
-    if (agentId) rpcParams.filter_agent_id = Number(agentId)
-    if (officeId) rpcParams.filter_office_id = Number(officeId)
-    if (agentKey) rpcParams.filter_agent_key = agentKey
-    if (officeKey) rpcParams.filter_office_key = officeKey
+    if (agentKey && KEY_PATTERN.test(agentKey)) rpcParams.filter_agent_key = agentKey
+    if (officeKey && KEY_PATTERN.test(officeKey)) rpcParams.filter_office_key = officeKey
 
     const status = params.get('status')
-    if (status) rpcParams.filter_status = status
+    if (status && VALID_STATUSES.has(status)) rpcParams.filter_status = status
 
     const tt = params.get('tt')
-    if (tt) rpcParams.filter_tt = tt
+    if (tt && VALID_TRANSACTION_TYPES.has(tt)) rpcParams.filter_tt = tt
 
-    const lp = params.get('lp')
-    const hp = params.get('hp')
-    if (lp) rpcParams.filter_min_price = Number(lp)
-    if (hp) rpcParams.filter_max_price = Number(hp)
+    const lp = safeNum(params.get('lp'))
+    const hp = safeNum(params.get('hp'))
+    if (lp != null) rpcParams.filter_min_price = lp
+    if (hp != null) rpcParams.filter_max_price = hp
 
-    const bd = params.get('bd')
-    const ba = params.get('ba')
-    if (bd) rpcParams.filter_min_beds = Number(bd)
-    if (ba) rpcParams.filter_min_baths = Number(ba)
+    const bd = safeNum(params.get('bd'))
+    const ba = safeNum(params.get('ba'))
+    if (bd != null) rpcParams.filter_min_beds = bd
+    if (ba != null) rpcParams.filter_min_baths = ba
 
     const pt = params.get('pt')
-    if (pt) rpcParams.filter_property_type = pt
+    if (pt && VALID_PROPERTY_TYPES.has(pt)) rpcParams.filter_property_type = pt
 
-    rpcParams.max_results = Math.min(Number(params.get('limit') || 5000), 10000)
+    const limit = safeNum(params.get('limit'))
+    rpcParams.max_results = Math.min(limit || 5000, 10000)
+
+    const maxResults = rpcParams.max_results as number
+    const PAGE_SIZE = 1000
 
     try {
-        const { data, error } = await supabase.rpc('get_listings_in_bbox', rpcParams)
+        const allRows: Record<string, unknown>[] = []
+        let from = 0
 
-        if (error) {
-            console.error('Listings RPC error:', error)
-            return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        while (from < maxResults) {
+            const to = Math.min(from + PAGE_SIZE - 1, maxResults - 1)
+            const { data, error } = await supabase.rpc('get_listings_in_bbox', rpcParams).range(from, to)
+
+            if (error) {
+                console.error('Listings RPC error:', error)
+                return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+            }
+
+            const rows = data || []
+            allRows.push(...rows)
+
+            if (rows.length < PAGE_SIZE) break
+            from += PAGE_SIZE
         }
 
         return NextResponse.json(
-            { pins: data || [], totalCount: data?.length || 0 },
+            { pins: allRows, totalCount: allRows.length },
             {
                 headers: {
                     'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
