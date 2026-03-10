@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo, useSyncExternalStore } from 'react'
 import { ListingMap, type MapBounds } from './ListingMap'
 import { MapPinCard } from './MapPinCard'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import type { MapPin } from '@/lib/listings'
 import { filterPins } from '@/lib/filter-pins'
 import { SERVICE_AREA_BBOX_STRING } from '@/lib/constants'
@@ -41,12 +41,21 @@ function getDesktopServerSnapshot() {
     return false
 }
 
+function bboxString(b: MapBounds): string {
+    const r = (n: number) => n.toFixed(4)
+    return `${r(b.west)},${r(b.south)},${r(b.east)},${r(b.north)}`
+}
+
 export function MapView({ filterParams }: MapViewProps) {
     const [pins, setPins] = useState<MapPin[] | null>(null)
-    const [bounds, setBounds] = useState<MapBounds | null>(null)
     const [page, setPage] = useState(0)
+    const [showSearchButton, setShowSearchButton] = useState(false)
+    const [fetching, setFetching] = useState(false)
     const sidebarRef = useRef<HTMLDivElement>(null)
     const abortRef = useRef<AbortController | null>(null)
+    const fetchedBboxRef = useRef<string>('')
+    const currentBoundsRef = useRef<MapBounds | null>(null)
+    const initialFetchDone = useRef(false)
 
     // Stabilize filterParams reference to prevent unnecessary re-fetches
     const filterKey = useMemo(() => JSON.stringify(filterParams), [filterParams])
@@ -62,42 +71,78 @@ export function MapView({ filterParams }: MapViewProps) {
         setPage(0)
     }
 
-    // Fetch pins from API when bounds or filters change (bbox query)
+    // Fetch pins for a given bbox
+    const fetchPins = useCallback(
+        (bbox: string) => {
+            abortRef.current?.abort()
+            const controller = new AbortController()
+            abortRef.current = controller
+
+            const params = new URLSearchParams({ bbox })
+            appendFilterParams(params, stableFilterParams)
+
+            setFetching(true)
+            fetch(`/api/listings?${params.toString()}`, { signal: controller.signal })
+                .then((r) => {
+                    if (!r.ok) throw new Error(`API error: ${r.status}`)
+                    return r.json()
+                })
+                .then((data) => {
+                    if (!controller.signal.aborted) {
+                        setPins(data.pins || [])
+                        fetchedBboxRef.current = bbox
+                        setShowSearchButton(false)
+                        setPage(0)
+                        setFetching(false)
+                    }
+                })
+                .catch((err) => {
+                    if (err.name !== 'AbortError') {
+                        console.error('Failed to fetch listings:', err)
+                        setPins([])
+                        setFetching(false)
+                    }
+                })
+
+            return () => controller.abort()
+        },
+        [stableFilterParams]
+    )
+
+    // Re-fetch when filters change
     useEffect(() => {
-        if (!bounds) return
+        if (!currentBoundsRef.current) return
+        const bbox = bboxString(currentBoundsRef.current)
+        fetchPins(bbox)
+    }, [stableFilterParams, fetchPins])
 
-        // Cancel previous in-flight request
-        abortRef.current?.abort()
-        const controller = new AbortController()
-        abortRef.current = controller
+    // Track bounds changes — initial load auto-fetches, subsequent moves show button
+    const handleBoundsChange = useCallback(
+        (b: MapBounds) => {
+            currentBoundsRef.current = b
+            const bbox = bboxString(b)
 
-        const bbox = `${bounds.west},${bounds.south},${bounds.east},${bounds.north}`
-        const params = new URLSearchParams({ bbox })
-        appendFilterParams(params, stableFilterParams)
+            if (!initialFetchDone.current) {
+                initialFetchDone.current = true
+                fetchPins(bbox)
+                return
+            }
 
-        fetch(`/api/listings?${params.toString()}`, { signal: controller.signal })
-            .then((r) => {
-                if (!r.ok) throw new Error(`API error: ${r.status}`)
-                return r.json()
-            })
-            .then((data) => {
-                if (!controller.signal.aborted) {
-                    setPins(data.pins || [])
-                }
-            })
-            .catch((err) => {
-                if (err.name !== 'AbortError') {
-                    console.error('Failed to fetch listings:', err)
-                    setPins([])
-                }
-            })
+            if (bbox !== fetchedBboxRef.current) {
+                setShowSearchButton(true)
+            }
+        },
+        [fetchPins]
+    )
 
-        return () => controller.abort()
-    }, [bounds, stableFilterParams])
+    const handleSearchThisArea = useCallback(() => {
+        if (!currentBoundsRef.current) return
+        fetchPins(bboxString(currentBoundsRef.current))
+    }, [fetchPins])
 
     // For mobile (no map), fetch without bbox on mount
     useEffect(() => {
-        if (isDesktop) return // Desktop uses bbox-based fetch above
+        if (isDesktop) return
 
         const params = new URLSearchParams()
         params.set('bbox', SERVICE_AREA_BBOX_STRING)
@@ -112,18 +157,7 @@ export function MapView({ filterParams }: MapViewProps) {
             .catch(() => setPins([]))
     }, [isDesktop, stableFilterParams])
 
-    // Debounced bounds change
-    const boundsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const handleBoundsChange = useCallback((b: MapBounds) => {
-        if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current)
-        boundsTimerRef.current = setTimeout(() => {
-            setBounds(b)
-            setPage(0)
-        }, 300)
-    }, [])
-
-    // Sort and re-apply filters client-side (server already filters, but this
-    // also handles sorting which the API does not apply)
+    // Sort and re-apply filters client-side
     const sortedPins = useMemo(() => {
         if (!pins) return []
         return filterPins(pins, stableFilterParams)
@@ -202,13 +236,18 @@ export function MapView({ filterParams }: MapViewProps) {
 
             {/* Map — only mounted on desktop */}
             {isDesktop && (
-                <div className="flex-1">
-                    {loading ? (
-                        <div className="w-full h-full bg-gray-100 animate-pulse flex items-center justify-center text-gray-400 text-sm">
-                            Loading map...
-                        </div>
-                    ) : (
-                        <ListingMap pins={sortedPins} onBoundsChange={handleBoundsChange} />
+                <div className="flex-1 relative">
+                    <ListingMap pins={sortedPins} onBoundsChange={handleBoundsChange} />
+
+                    {showSearchButton && (
+                        <button
+                            onClick={handleSearchThisArea}
+                            disabled={fetching}
+                            className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-white border border-gray-300 shadow-lg rounded-full px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
+                        >
+                            <Search className="w-4 h-4" />
+                            {fetching ? 'Searching...' : 'Search this area'}
+                        </button>
                     )}
                 </div>
             )}
