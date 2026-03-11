@@ -1,17 +1,75 @@
 import { Resend } from 'resend'
+import { contactSchema } from '@/lib/contact-schema'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+const CONTACT_EMAIL = process.env.REALTOR_CONTACT_EMAIL || 'abdulbasharmalrealtor@gmail.com'
+
+// Simple rate limiter: max 5 requests per IP per minute
+const rateMap = new Map<string, { count: number; resetAt: number }>()
+const RATE_LIMIT = 5
+const RATE_WINDOW_MS = 60_000
+
+function isRateLimited(ip: string): boolean {
+    const now = Date.now()
+
+    // Evict expired entries periodically (when map gets large)
+    if (rateMap.size > 1000) {
+        for (const [key, val] of rateMap) {
+            if (now > val.resetAt) rateMap.delete(key)
+        }
+    }
+
+    const entry = rateMap.get(ip)
+    if (!entry || now > entry.resetAt) {
+        rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS })
+        return false
+    }
+    entry.count++
+    return entry.count > RATE_LIMIT
+}
+
+// HTML-escape user input to prevent injection in email templates
+function esc(s: string): string {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+}
 
 export async function POST(request: Request) {
     try {
+        // Rate limiting
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+        if (isRateLimited(ip)) {
+            return Response.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 })
+        }
+
+        // Server-side validation
         const body = await request.json()
-        const { firstName, lastName, email, phone, message, intent, language, listingAddress } = body
+        const result = contactSchema.safeParse(body)
+        if (!result.success) {
+            return Response.json({ success: false, error: 'Invalid form data', details: result.error.flatten() }, { status: 400 })
+        }
+
+        const { firstName, lastName, email, phone, message, intent, language, listingAddress } = result.data
+
+        // Escape all user values for HTML email
+        const safeFirstName = esc(firstName)
+        const safeLastName = esc(lastName)
+        const safeEmail = esc(email)
+        const safePhone = phone ? esc(phone) : ''
+        const safeMessage = esc(message)
+        const safeIntent = intent ? esc(intent) : ''
+        const safeLanguage = language ? esc(language) : ''
+        const safeListingAddress = listingAddress ? esc(listingAddress) : ''
 
         const { error } = await resend.emails.send({
             from: 'Abdul Basharmal <no-reply@abdulsellshomes.com>',
-            to: 'jonvan225@gmail.com',
+            to: CONTACT_EMAIL,
             replyTo: email,
-            subject: `New ${intent || 'Contact'} Inquiry from ${firstName} ${lastName}`,
+            subject: `New ${safeIntent || 'Contact'} Inquiry from ${safeFirstName} ${safeLastName}`,
             html: `
 <!DOCTYPE html>
 <html>
@@ -38,7 +96,7 @@ export async function POST(request: Request) {
 <!-- Title -->
 <tr>
 <td style="padding:32px 40px 16px;">
-<h2 style="margin:0;color:#1a1a1a;font-size:18px;font-weight:400;letter-spacing:1px;">New ${intent || 'Contact'} Inquiry</h2>
+<h2 style="margin:0;color:#1a1a1a;font-size:18px;font-weight:400;letter-spacing:1px;">New ${safeIntent || 'Contact'} Inquiry</h2>
 <p style="margin:8px 0 0;color:#888;font-size:12px;font-family:Arial,Helvetica,sans-serif;">Received from your website</p>
 </td>
 </tr>
@@ -53,37 +111,37 @@ export async function POST(request: Request) {
 <tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Name</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${firstName} ${lastName}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeFirstName} ${safeLastName}</span>
 </td>
 </tr>
 <tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Email</span><br>
-<a href="mailto:${email}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${email}</a>
+<a href="mailto:${safeEmail}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${safeEmail}</a>
 </td>
 </tr>
-${phone ? `<tr>
+${safePhone ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Phone</span><br>
-<a href="tel:${phone}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${phone}</a>
+<a href="tel:${safePhone}" style="color:#1a1a1a;font-size:15px;text-decoration:none;">${safePhone}</a>
 </td>
 </tr>` : ''}
-${intent ? `<tr>
+${safeIntent ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Interest</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${intent}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeIntent}</span>
 </td>
 </tr>` : ''}
-${language ? `<tr>
+${safeLanguage ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Preferred Language</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${language}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeLanguage}</span>
 </td>
 </tr>` : ''}
-${listingAddress ? `<tr>
+${safeListingAddress ? `<tr>
 <td style="padding:8px 0;vertical-align:top;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Listing Address</span><br>
-<span style="color:#1a1a1a;font-size:15px;">${listingAddress}</span>
+<span style="color:#1a1a1a;font-size:15px;">${safeListingAddress}</span>
 </td>
 </tr>` : ''}
 </table>
@@ -97,14 +155,14 @@ ${listingAddress ? `<tr>
 <tr>
 <td style="padding:24px 40px 32px;">
 <span style="color:#999;font-size:11px;letter-spacing:1px;font-family:Arial,Helvetica,sans-serif;text-transform:uppercase;">Message</span>
-<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${message}</p>
+<p style="margin:10px 0 0;color:#1a1a1a;font-size:15px;line-height:1.7;">${safeMessage}</p>
 </td>
 </tr>
 
 <!-- Reply CTA -->
 <tr>
 <td style="padding:0 40px 36px;" align="center">
-<a href="mailto:${email}" style="display:inline-block;background-color:#1a1a1a;color:#ffffff;font-size:13px;font-family:Arial,Helvetica,sans-serif;letter-spacing:2px;text-decoration:none;padding:14px 36px;border-radius:2px;">REPLY TO ${firstName.toUpperCase()}</a>
+<a href="mailto:${safeEmail}" style="display:inline-block;background-color:#1a1a1a;color:#ffffff;font-size:13px;font-family:Arial,Helvetica,sans-serif;letter-spacing:2px;text-decoration:none;padding:14px 36px;border-radius:2px;">REPLY TO ${esc(firstName.toUpperCase())}</a>
 </td>
 </tr>
 

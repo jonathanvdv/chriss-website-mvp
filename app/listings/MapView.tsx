@@ -18,8 +18,10 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
     const [bounds, setBounds] = useState<MapBounds | null>(null)
     const [page, setPage] = useState(0)
     const [isDesktop, setIsDesktop] = useState(false)
+    const [isSearching, setIsSearching] = useState(false)
     const sidebarRef = useRef<HTMLDivElement>(null)
     const abortRef = useRef<AbortController | null>(null)
+    const prevFilterKey = useRef(JSON.stringify(filterParams))
 
     // Detect desktop (lg breakpoint = 1024px)
     useEffect(() => {
@@ -43,16 +45,14 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
         const params = new URLSearchParams({ bbox })
 
         // Forward filter params to API
-        if (filterParams.tt) params.set('tt', filterParams.tt)
-        if (filterParams.lp) params.set('lp', filterParams.lp)
-        if (filterParams.hp) params.set('hp', filterParams.hp)
-        if (filterParams.bd) params.set('bd', filterParams.bd)
-        if (filterParams.ba) params.set('ba', filterParams.ba)
-        if (filterParams.pt) params.set('pt', filterParams.pt)
+        for (const key of ['tt', 'lp', 'hp', 'bd', 'ba', 'pt', 'q', 'agent_key', 'office_key']) {
+            if (filterParams[key]) params.set(key, filterParams[key])
+        }
 
-        // Multi-tenant: pass agent_key or office_key if configured
-        if (filterParams.agent_key) params.set('agent_key', filterParams.agent_key)
-        if (filterParams.office_key) params.set('office_key', filterParams.office_key)
+        const currentKey = JSON.stringify(filterParams)
+        const filtersChanged = prevFilterKey.current !== currentKey
+        prevFilterKey.current = currentKey
+        if (filtersChanged && pins !== null) setIsSearching(true)
 
         fetch(`/api/listings?${params.toString()}`, {
             signal: controller.signal,
@@ -62,12 +62,14 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
             .then(data => {
                 if (!controller.signal.aborted) {
                     setPins(data.pins || [])
+                    setIsSearching(false)
                 }
             })
             .catch(err => {
                 if (err.name !== 'AbortError') {
                     console.error('Failed to fetch listings:', err)
                     setPins([])
+                    setIsSearching(false)
                 }
             })
 
@@ -81,19 +83,15 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
         const params = new URLSearchParams()
         // Use a large default bbox covering the service area
         params.set('bbox', '-81.0,43.0,-79.5,44.0')
-        if (filterParams.tt) params.set('tt', filterParams.tt)
-        if (filterParams.lp) params.set('lp', filterParams.lp)
-        if (filterParams.hp) params.set('hp', filterParams.hp)
-        if (filterParams.bd) params.set('bd', filterParams.bd)
-        if (filterParams.ba) params.set('ba', filterParams.ba)
-        if (filterParams.pt) params.set('pt', filterParams.pt)
-        if (filterParams.agent_key) params.set('agent_key', filterParams.agent_key)
-        if (filterParams.office_key) params.set('office_key', filterParams.office_key)
+        for (const key of ['tt', 'lp', 'hp', 'bd', 'ba', 'pt', 'q', 'agent_key', 'office_key']) {
+            if (filterParams[key]) params.set(key, filterParams[key])
+        }
 
+        if (pins !== null) setIsSearching(true)
         fetch(`/api/listings?${params.toString()}`, { priority: 'low' as any })
             .then(r => r.json())
-            .then(data => setPins(data.pins || []))
-            .catch(() => setPins([]))
+            .then(data => { setPins(data.pins || []); setIsSearching(false) })
+            .catch(() => { setPins([]); setIsSearching(false) })
     }, [isDesktop, filterParams])
 
     // Reset page when filters change
@@ -109,10 +107,13 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
         }, 300)
     }, [])
 
+    // Pins are already filtered by search query server-side in /api/listings
+    const filteredPins = pins
+
     // Sort pins client-side
     const sortedPins = useMemo(() => {
-        if (!pins) return []
-        const sorted = [...pins]
+        if (!filteredPins) return []
+        const sorted = [...filteredPins]
         const sortField = filterParams.sortField
         const sortDir = filterParams.sortDirection || 'desc'
         if (sortField === 'listingPrice') {
@@ -125,7 +126,7 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
             })
         }
         return sorted
-    }, [pins, filterParams.sortField, filterParams.sortDirection])
+    }, [filteredPins, filterParams.sortField, filterParams.sortDirection])
 
     const totalPages = Math.max(1, Math.ceil(sortedPins.length / PER_PAGE))
     const sidebarPins = useMemo(
@@ -138,16 +139,17 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
         sidebarRef.current?.scrollTo({ top: 0 })
     }, [page])
 
-    const loading = pins === null
+    const loading = filteredPins === null
+    const showLoading = loading || isSearching
 
     return (
-        <div className="flex h-[calc(100vh-180px)] min-h-[500px]">
+        <div className="flex h-[calc(100vh-180px)] min-h-[500px] rounded-xl overflow-hidden border border-gray-200 shadow-sm">
             {/* Sidebar */}
             <div className="w-full lg:w-[340px] xl:w-[380px] flex-shrink-0 flex flex-col bg-white border-r border-gray-200">
                 <div className="px-3 py-2 border-b border-gray-200 flex-shrink-0">
                     <p className="text-sm text-gray-600">
-                        {loading ? (
-                            <span className="text-gray-400">Loading...</span>
+                        {showLoading ? (
+                            <span className="text-gray-400">Searching...</span>
                         ) : (
                             <>
                                 Results: <strong className="text-gray-900">{sortedPins.length.toLocaleString()} Listings</strong>
@@ -156,18 +158,54 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
                     </p>
                 </div>
 
-                <div ref={sidebarRef} className="flex-1 overflow-y-auto">
-                    {loading ? (
-                        Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="flex gap-3 p-3 border-b border-gray-200 animate-pulse">
-                                <div className="w-[140px] h-[100px] bg-gray-200 rounded flex-shrink-0" />
-                                <div className="flex-1 space-y-2 py-1">
-                                    <div className="h-4 bg-gray-200 rounded w-2/3" />
-                                    <div className="h-3 bg-gray-200 rounded w-full" />
-                                    <div className="h-3 bg-gray-200 rounded w-1/2" />
+                <div ref={sidebarRef} className="flex-1 overflow-y-auto relative">
+                    {showLoading ? (
+                        <div className="flex flex-col items-center justify-center h-full px-6 gap-5 pt-8">
+                            {/* Animated house with scanning effect */}
+                            <div className="relative w-24 h-24 flex-shrink-0">
+                                {/* Pulsing background circle */}
+                                <div className="absolute inset-0 rounded-full bg-brand-accent/5 animate-ping" style={{ animationDuration: '2s' }} />
+                                <div className="absolute inset-2 rounded-full bg-brand-accent/10 animate-pulse" />
+                                {/* House icon */}
+                                <svg viewBox="0 0 64 64" className="relative w-full h-full text-brand-accent/30" fill="currentColor">
+                                    <path d="M32 6L4 30h8v24h16V40h8v14h16V30h8L32 6z" />
+                                </svg>
+                                {/* Animated magnifying glass orbiting */}
+                                <div className="absolute bottom-0 right-0" style={{ animation: 'bounce 1s ease-in-out infinite' }}>
+                                    <svg viewBox="0 0 24 24" className="w-9 h-9 drop-shadow-md" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="10" cy="10" r="7" className="text-brand-accent" />
+                                        <line x1="15" y1="15" x2="21" y2="21" className="text-brand-accent" />
+                                    </svg>
                                 </div>
                             </div>
-                        ))
+                            <div className="text-center space-y-3">
+                                <p className="text-base font-semibold text-gray-800">Finding your perfect home</p>
+                                <p className="text-xs text-gray-400">Searching thousands of MLS® listings...</p>
+                                {/* Animated progress bar */}
+                                <div className="w-48 h-1 bg-gray-100 rounded-full overflow-hidden mx-auto">
+                                    <div className="h-full bg-brand-accent rounded-full" style={{ animation: 'shimmer 1.5s ease-in-out infinite', width: '40%' }} />
+                                </div>
+                            </div>
+                            {/* Skeleton preview cards */}
+                            <div className="w-full space-y-2 mt-2">
+                                {[...Array(3)].map((_, i) => (
+                                    <div key={i} className="flex gap-3 p-3 rounded-lg bg-gray-50 animate-pulse" style={{ animationDelay: `${i * 150}ms` }}>
+                                        <div className="w-20 h-14 bg-gray-200 rounded flex-shrink-0" />
+                                        <div className="flex-1 space-y-2 py-1">
+                                            <div className="h-3 bg-gray-200 rounded w-20" />
+                                            <div className="h-2.5 bg-gray-200 rounded w-32" />
+                                            <div className="h-2 bg-gray-200 rounded w-24" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <style jsx>{`
+                                @keyframes shimmer {
+                                    0% { transform: translateX(-100%); }
+                                    100% { transform: translateX(350%); }
+                                }
+                            `}</style>
+                        </div>
                     ) : sidebarPins.length > 0 ? (
                         sidebarPins.map(pin => (
                             <MapPinCard key={pin.id} pin={pin} />
@@ -206,8 +244,12 @@ export function MapView({ filterParams, totalCount }: MapViewProps) {
             {isDesktop && (
                 <div className="flex-1">
                     {loading ? (
-                        <div className="w-full h-full bg-gray-100 animate-pulse flex items-center justify-center text-gray-400 text-sm">
-                            Loading map...
+                        <div className="w-full h-full bg-gray-100 flex flex-col items-center justify-center gap-4">
+                            <div className="relative w-16 h-16">
+                                <div className="absolute inset-0 rounded-full border-4 border-gray-200" />
+                                <div className="absolute inset-0 rounded-full border-4 border-brand-accent border-t-transparent animate-spin" />
+                            </div>
+                            <p className="text-sm text-gray-400 font-medium">Loading map...</p>
                         </div>
                     ) : (
                         <ListingMap pins={sortedPins} onBoundsChange={handleBoundsChange} />

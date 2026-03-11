@@ -1,5 +1,8 @@
 import { Metadata } from 'next'
+import { cache } from 'react'
 import { getListing } from '@/lib/listings'
+
+const getCachedListing = cache((id: string) => getListing(id))
 import { ImageGallery } from '@/components/listings/ImageGallery'
 import { ListingDisclaimer } from '@/components/listings/ListingDisclaimer'
 import { ContactForm } from '@/components/shared/ContactForm'
@@ -9,7 +12,7 @@ import Image from 'next/image'
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
     const unresolvedParams = await params
-    const listing = await getListing(unresolvedParams.id)
+    const listing = await getCachedListing(unresolvedParams.id)
     return {
         title: `${listing.address.full} - $${listing.price.toLocaleString()}`,
         description: `${listing.beds} bed, ${listing.baths} bath home at ${listing.address.full}. Listed at $${listing.price.toLocaleString()}. Contact Abdul Basharmal to book a showing.`,
@@ -33,7 +36,7 @@ export default async function ListingDetailPage({
     params: Promise<{ id: string }>
 }) {
     const unresolvedParams = await params
-    const listing = await getListing(unresolvedParams.id)
+    const listing = await getCachedListing(unresolvedParams.id)
 
     if (!listing) {
         return (

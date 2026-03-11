@@ -3,20 +3,10 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { contactSchema, type ContactFormData } from '@/lib/contact-schema'
 
-const schema = z.object({
-    firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
-    email: z.string().email('Invalid email address'),
-    phone: z.string().optional(),
-    message: z.string().min(10, 'Please write a brief message (min 10 characters)'),
-    intent: z.enum(['Buy', 'Sell', 'Both', 'Just Curious']).optional(),
-    language: z.enum(['English', 'Farsi', 'Dari', 'Persian', 'Hindi', 'Urdu']).optional(),
-    listingAddress: z.string().optional(),
-})
-
-type FormData = z.infer<typeof schema>
+type FormData = ContactFormData
+const schema = contactSchema
 
 export function ContactForm({ className = '', defaultMessage = '', defaultIntent, showLanguage = false, listingAddress }: { className?: string, defaultMessage?: string, defaultIntent?: FormData['intent'], showLanguage?: boolean, listingAddress?: string }) {
     const [isSuccess, setIsSuccess] = useState(false)

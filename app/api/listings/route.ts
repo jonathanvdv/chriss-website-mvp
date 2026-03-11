@@ -1,88 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/db'
+import { getAllMapPins, parseFilterParams, filterBySearchQuery, type MapPin } from '@/lib/listings'
+
+// ─── Server-side pin cache ──────────────────────────────────────────────
+// Caches the full DDF API result for 5 minutes per filter combination.
+// This eliminates the 10-15s DDF fetch on every map pan/zoom/filter change.
+const PIN_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const pinCache = new Map<string, { pins: MapPin[]; totalCount: number; expiresAt: number; promise?: Promise<{ pins: MapPin[]; totalCount: number }> }>()
+
+function getCacheKey(filterObj: Record<string, string>): string {
+    // Only include DDF-relevant filter keys (not bbox, q, sort — those are client-side)
+    const relevant = ['tt', 'lp', 'hp', 'bd', 'ba', 'pt', 'bt', 'city'] as const
+    return relevant.map(k => `${k}=${filterObj[k] || ''}`).join('&')
+}
+
+async function getCachedPins(filterObj: Record<string, string>): Promise<{ pins: MapPin[]; totalCount: number }> {
+    const key = getCacheKey(filterObj)
+    const cached = pinCache.get(key)
+
+    // Return fresh cache immediately
+    if (cached && Date.now() < cached.expiresAt) {
+        return { pins: cached.pins, totalCount: cached.totalCount }
+    }
+
+    // If stale cache exists, return it immediately and refresh in background
+    if (cached && cached.pins.length > 0) {
+        if (!cached.promise) {
+            cached.promise = fetchAndCache(filterObj, key)
+        }
+        return { pins: cached.pins, totalCount: cached.totalCount }
+    }
+
+    // No cache at all — must wait for fetch
+    // Deduplicate concurrent requests for the same key
+    if (cached?.promise) {
+        return cached.promise
+    }
+
+    const promise = fetchAndCache(filterObj, key)
+    pinCache.set(key, { pins: [], totalCount: 0, expiresAt: 0, promise })
+    return promise
+}
+
+async function fetchAndCache(filterObj: Record<string, string>, key: string): Promise<{ pins: MapPin[]; totalCount: number }> {
+    try {
+        const filters = parseFilterParams(filterObj)
+        const result = await getAllMapPins(filters)
+        pinCache.set(key, { pins: result.pins, totalCount: result.totalCount, expiresAt: Date.now() + PIN_CACHE_TTL })
+        return result
+    } catch (error) {
+        pinCache.delete(key)
+        throw error
+    }
+}
 
 /**
- * GET /api/listings?bbox=lng1,lat1,lng2,lat2&agent_id=123
+ * GET /api/listings?bbox=lng1,lat1,lng2,lat2
  *
- * Returns listings within a bounding box, with optional multi-tenant filtering.
- * Uses a PostGIS RPC function on Supabase for spatial queries.
- *
- * Query params:
- *   bbox       - required: "west,south,east,north"
- *   agent_id   - optional: filter by agent's internal ID
- *   office_id  - optional: filter by office's internal ID
- *   agent_key  - optional: filter by CREA agent key
- *   office_key - optional: filter by CREA office key
- *   status     - optional: Active|Sold|Pending (default: Active)
- *   tt         - optional: sale|rent (transaction type)
- *   lp         - optional: min price
- *   hp         - optional: max price
- *   bd         - optional: min beds
- *   ba         - optional: min baths
- *   pt         - optional: property type
- *   limit      - optional: max results (default: 5000)
+ * Returns listings within a bounding box via DDF API.
+ * Filters are passed as query params (tt, lp, hp, bd, ba, pt).
  */
 export async function GET(request: NextRequest) {
     const params = request.nextUrl.searchParams
 
-    const bbox = params.get('bbox')
-    if (!bbox) {
-        return NextResponse.json({ error: 'bbox parameter is required (west,south,east,north)' }, { status: 400 })
+    // Build filter params from query string
+    const filterObj: Record<string, string> = {}
+    for (const key of ['tt', 'lp', 'hp', 'bd', 'ba', 'pt', 'bt', 'city', 'q']) {
+        const val = params.get(key)
+        if (val) filterObj[key] = val
     }
-
-    const [west, south, east, north] = bbox.split(',').map(Number)
-    if ([west, south, east, north].some(isNaN)) {
-        return NextResponse.json({ error: 'Invalid bbox format. Expected: west,south,east,north' }, { status: 400 })
-    }
-
-    const rpcParams: Record<string, any> = {
-        bbox_west: west,
-        bbox_south: south,
-        bbox_east: east,
-        bbox_north: north,
-    }
-
-    const agentId = params.get('agent_id')
-    const officeId = params.get('office_id')
-    const agentKey = params.get('agent_key')
-    const officeKey = params.get('office_key')
-
-    if (agentId) rpcParams.filter_agent_id = Number(agentId)
-    if (officeId) rpcParams.filter_office_id = Number(officeId)
-    if (agentKey) rpcParams.filter_agent_key = agentKey
-    if (officeKey) rpcParams.filter_office_key = officeKey
-
-    const status = params.get('status')
-    if (status) rpcParams.filter_status = status
-
-    const tt = params.get('tt')
-    if (tt) rpcParams.filter_tt = tt
-
-    const lp = params.get('lp')
-    const hp = params.get('hp')
-    if (lp) rpcParams.filter_min_price = Number(lp)
-    if (hp) rpcParams.filter_max_price = Number(hp)
-
-    const bd = params.get('bd')
-    const ba = params.get('ba')
-    if (bd) rpcParams.filter_min_beds = Number(bd)
-    if (ba) rpcParams.filter_min_baths = Number(ba)
-
-    const pt = params.get('pt')
-    if (pt) rpcParams.filter_property_type = pt
-
-    rpcParams.max_results = Math.min(Number(params.get('limit') || 5000), 10000)
 
     try {
-        const { data, error } = await supabase.rpc('get_listings_in_bbox', rpcParams)
+        const searchQuery = filterObj.q
+        delete filterObj.q // Don't pass to OData or cache key
 
-        if (error) {
-            console.error('Listings RPC error:', error)
-            return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        const { pins } = await getCachedPins(filterObj)
+
+        // Filter by search query (address matching)
+        let filteredPins = filterBySearchQuery(pins, searchQuery)
+
+        // If bbox is provided, filter by bounds
+        const bbox = params.get('bbox')
+        if (bbox) {
+            const [west, south, east, north] = bbox.split(',').map(Number)
+            if (![west, south, east, north].some(isNaN)) {
+                filteredPins = filteredPins.filter(p =>
+                    p.lat >= south && p.lat <= north &&
+                    p.lng >= west && p.lng <= east
+                )
+            }
         }
 
         return NextResponse.json(
-            { pins: data || [], totalCount: data?.length || 0 },
+            { pins: filteredPins, totalCount: filteredPins.length },
             {
                 headers: {
                     'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
@@ -91,6 +100,6 @@ export async function GET(request: NextRequest) {
         )
     } catch (error) {
         console.error('Listings query error:', error)
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        return NextResponse.json({ pins: [], totalCount: 0 }, { status: 500 })
     }
 }

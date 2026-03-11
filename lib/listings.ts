@@ -6,10 +6,19 @@ const DDF_CLIENT_SECRET = process.env.DDF_CLIENT_SECRET || ''
 // ─── Token Cache ─────────────────────────────────────────────────────────
 let cachedToken: string | null = null
 let tokenExpiry = 0
+let tokenPromise: Promise<string> | null = null
 
 async function getDdfToken(): Promise<string> {
     if (cachedToken && Date.now() < tokenExpiry) return cachedToken
 
+    // Deduplicate concurrent token refreshes
+    if (!tokenPromise) {
+        tokenPromise = refreshToken().finally(() => { tokenPromise = null })
+    }
+    return tokenPromise
+}
+
+async function refreshToken(): Promise<string> {
     const res = await fetch(DDF_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -33,10 +42,36 @@ async function getDdfToken(): Promise<string> {
     return cachedToken!
 }
 
+// ─── Concurrency Pool ────────────────────────────────────────────────────
+
+const CONCURRENCY_LIMIT = 5
+
+async function pool<T>(tasks: (() => Promise<T>)[], limit: number = CONCURRENCY_LIMIT, fallback?: T): Promise<T[]> {
+    const results: T[] = []
+    let i = 0
+    async function next(): Promise<void> {
+        while (i < tasks.length) {
+            const idx = i++
+            try {
+                results[idx] = await tasks[idx]()
+            } catch (err) {
+                if (fallback !== undefined) {
+                    results[idx] = fallback
+                } else {
+                    throw err
+                }
+            }
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => next()))
+    return results
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────
 
 export interface MapPin {
     id: string
+    mlsNumber: string
     lat: number
     lng: number
     price: number
@@ -145,6 +180,7 @@ export interface ListingFilters {
     transactionType?: 'sale' | 'rent'
     storeys?: number
     yearBuilt?: number
+    searchQuery?: string
     limit?: number
     offset?: number
     sortField?: 'listingPrice' | 'listingDate'
@@ -158,22 +194,32 @@ export interface ListingFilters {
 
 const SERVICE_AREA_CITIES = ['Kitchener', 'Waterloo', 'Cambridge', 'Guelph', 'Brampton', 'Mississauga', 'Toronto']
 
+// Sanitize string values for OData queries — escape single quotes
+function odataStr(val: string): string {
+    return val.replace(/'/g, "''")
+}
+
+const VALID_PROPERTY_TYPES = ['House', 'Apartment', 'Row / Townhouse', 'Duplex', 'Triplex', 'Fourplex', 'Land']
+const VALID_BUILDING_TYPES = ['Single Family', 'Multi-family', 'Vacant Land', 'Apartment', 'Row / Townhouse', 'Recreational', 'Agriculture']
+
 function buildODataFilter(filters: ListingFilters): string {
     const parts: string[] = []
 
-    if (filters.beds) parts.push(`BedroomsTotal ge ${filters.beds}`)
-    if (filters.baths) parts.push(`BathroomsTotalInteger ge ${filters.baths}`)
+    if (filters.beds) parts.push(`BedroomsTotal ge ${Math.floor(Number(filters.beds))}`)
+    if (filters.baths) parts.push(`BathroomsTotalInteger ge ${Math.floor(Number(filters.baths))}`)
 
-    if (filters.propertyType) {
+    if (filters.propertyType && VALID_PROPERTY_TYPES.includes(filters.propertyType)) {
         if (filters.propertyType === 'Land') {
             parts.push(`PropertySubType eq 'Vacant Land'`)
         } else {
-            parts.push(`StructureType/any(s: s eq '${filters.propertyType}')`)
+            parts.push(`StructureType/any(s: s eq '${odataStr(filters.propertyType)}')`)
         }
     }
-    if (filters.buildingType) parts.push(`PropertySubType eq '${filters.buildingType}'`)
-    if (filters.storeys) parts.push(`Stories ge ${filters.storeys}`)
-    if (filters.yearBuilt) parts.push(`YearBuilt ge ${filters.yearBuilt}`)
+    if (filters.buildingType && VALID_BUILDING_TYPES.includes(filters.buildingType)) {
+        parts.push(`PropertySubType eq '${odataStr(filters.buildingType)}'`)
+    }
+    if (filters.storeys) parts.push(`Stories ge ${Math.floor(Number(filters.storeys))}`)
+    if (filters.yearBuilt) parts.push(`YearBuilt ge ${Math.floor(Number(filters.yearBuilt))}`)
 
     // Transaction type filtering
     // Rentals: ListPrice is null, price is in TotalActualRent
@@ -205,8 +251,8 @@ function buildODataFilter(filters: ListingFilters): string {
         }
     }
 
-    if (filters.city) {
-        parts.push(`City eq '${filters.city}'`)
+    if (filters.city && SERVICE_AREA_CITIES.includes(filters.city)) {
+        parts.push(`City eq '${odataStr(filters.city)}'`)
     } else {
         // Default to Abdul's service area
         const cityFilter = SERVICE_AREA_CITIES.map(c => `City eq '${c}'`).join(' or ')
@@ -284,7 +330,16 @@ export async function getListings(filters: ListingFilters = {}): Promise<{ listi
         listings.sort((a: Listing, b: Listing) => dir === 'asc' ? a.price - b.price : b.price - a.price)
     }
 
-    return { listings, totalCount }
+    // Post-fetch search query filtering
+    if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase().trim()
+        listings = listings.filter((l: Listing) =>
+            l.address.full.toLowerCase().includes(q) ||
+            (l.address.neighbourhood?.toLowerCase().includes(q))
+        )
+    }
+
+    return { listings, totalCount: listings.length }
 }
 
 // ─── Fetch All Listings (batched) ────────────────────────────────────────
@@ -371,7 +426,7 @@ async function fetchRemainingBatches(
     }
 
     const remainingPages = Math.ceil((totalCount - DDF_PAGE_LIMIT) / DDF_PAGE_LIMIT)
-    const batchPromises = Array.from({ length: remainingPages }, (_, i) => {
+    const tasks = Array.from({ length: remainingPages }, (_, i) => () => {
         const skip = (i + 1) * DDF_PAGE_LIMIT
         const params = new URLSearchParams(baseParams)
         params.delete('$count')
@@ -384,14 +439,14 @@ async function fetchRemainingBatches(
         }).then(async res => {
             if (!res.ok) {
                 console.error('DDF batch error:', res.status, `skip=${skip}`)
-                return []
+                return [] as Listing[]
             }
             const data = await res.json()
-            return (data.value || []).map(normalizeDdfListing)
+            return (data.value || []).map(normalizeDdfListing) as Listing[]
         })
     })
 
-    const batches = await Promise.all(batchPromises)
+    const batches = await pool(tasks)
     const allListings = [firstBatch, ...batches].flat()
     return { listings: allListings, totalCount }
 }
@@ -405,6 +460,11 @@ async function fetchRemainingBatches(
  * @returns The normalized listing object
  */
 export async function getListing(listingId: string): Promise<Listing> {
+    // Validate listingId is alphanumeric (prevent OData injection)
+    if (!/^[a-zA-Z0-9_-]+$/.test(listingId)) {
+        throw new Error('Invalid listing ID')
+    }
+
     if (!DDF_CLIENT_ID) {
         const { mockListings } = await import('./mock-listings')
         const found = mockListings.find(l => l.id === listingId)
@@ -642,6 +702,7 @@ export function toMapPin(listing: Listing): MapPin | null {
     if (listing.latitude < 43.0 || listing.latitude > 44.0 || listing.longitude < -81.0 || listing.longitude > -79.5) return null
     return {
         id: listing.id,
+        mlsNumber: listing.mlsNumber,
         lat: listing.latitude,
         lng: listing.longitude,
         price: listing.price,
@@ -660,7 +721,7 @@ export function toMapPin(listing: Listing): MapPin | null {
 // ─── Fetch All Map Pins (lightweight, uses $select) ─────────────────────
 
 const MAP_PIN_SELECT = [
-    'ListingKey', 'Latitude', 'Longitude', 'ListPrice', 'TotalActualRent',
+    'ListingKey', 'ListingId', 'Latitude', 'Longitude', 'ListPrice', 'TotalActualRent',
     'BedroomsTotal', 'BathroomsTotalInteger', 'LivingArea', 'BuildingAreaTotal',
     'StreetNumber', 'StreetName', 'StreetSuffix', 'UnitNumber', 'City', 'StateOrProvince', 'PostalCode',
     'Media', 'StructureType', 'PropertySubType', 'StandardStatus', 'MlsStatus',
@@ -691,6 +752,7 @@ function normalizeDdfToPin(raw: any): MapPin | null {
 
     return {
         id: raw.ListingKey,
+        mlsNumber: raw.ListingId || raw.ListingKey,
         lat,
         lng,
         price: raw.ListPrice || raw.TotalActualRent || 0,
@@ -756,10 +818,10 @@ export async function getAllMapPins(filters: ListingFilters = {}): Promise<{ pin
         return { pins: firstPins, totalCount }
     }
 
-    // Fetch remaining pages in parallel
+    // Fetch remaining pages with concurrency limit
     const currentToken = cachedToken || token
     const remainingPages = Math.ceil((totalCount - DDF_PAGE_LIMIT) / DDF_PAGE_LIMIT)
-    const batchPromises = Array.from({ length: remainingPages }, (_, i) => {
+    const tasks = Array.from({ length: remainingPages }, (_, i) => () => {
         const skip = (i + 1) * DDF_PAGE_LIMIT
         const params = new URLSearchParams(firstParams)
         params.delete('$count')
@@ -779,7 +841,7 @@ export async function getAllMapPins(filters: ListingFilters = {}): Promise<{ pin
         })
     })
 
-    const batches = await Promise.all(batchPromises)
+    const batches = await pool(tasks)
     const allPins = [firstPins, ...batches].flat()
     return { pins: allPins, totalCount }
 }
@@ -824,9 +886,22 @@ export function parseFilterParams(params: Record<string, string>): ListingFilter
         transactionType: (params.tt as 'sale' | 'rent') || undefined,
         storeys: params.storeys ? Number(params.storeys) : undefined,
         yearBuilt: params.yb ? Number(params.yb) : undefined,
+        searchQuery: params.q || undefined,
         sortField: (params.sortField as 'listingPrice' | 'listingDate') || undefined,
         sortDirection: (params.sortDirection as 'asc' | 'desc') || undefined,
     }
+}
+
+// ─── Search query filter (post-fetch, works on normalized data) ───────────
+
+export function filterBySearchQuery<T extends { address: string; mlsNumber?: string }>(items: T[], query?: string): T[] {
+    if (!query) return items
+    const q = query.toLowerCase().trim()
+    if (!q) return items
+    return items.filter(item =>
+        item.address.toLowerCase().includes(q) ||
+        (item.mlsNumber && item.mlsNumber.toLowerCase().includes(q))
+    )
 }
 
 // ─── Mock data filter helper ─────────────────────────────────────────────
@@ -839,6 +914,10 @@ function applyMockFilters(listings: Listing[], filters: ListingFilters): Listing
     if (filters.beds) result = result.filter(l => l.beds >= filters.beds!)
     if (filters.baths) result = result.filter(l => l.baths >= filters.baths!)
     if (filters.city) result = result.filter(l => l.address.city === filters.city)
+    if (filters.searchQuery) {
+        const q = filters.searchQuery.toLowerCase()
+        result = result.filter(l => l.address.full.toLowerCase().includes(q) || (l.address.neighbourhood?.toLowerCase().includes(q)))
+    }
 
     return result.slice(0, filters.limit || 12)
 }

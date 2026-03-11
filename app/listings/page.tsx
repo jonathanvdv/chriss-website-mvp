@@ -1,5 +1,5 @@
 import { Metadata } from 'next'
-import { getListings, getListingCount, ListingFilters } from '@/lib/listings'
+import { getListings, ListingFilters } from '@/lib/listings'
 import { ListingSearch } from '@/components/listings/ListingSearch'
 import { ListingCard } from '@/components/listings/ListingCard'
 import { ListingDisclaimer } from '@/components/listings/ListingDisclaimer'
@@ -38,6 +38,7 @@ export default async function ListingsPage({
         yearBuilt: unresolvedSearchParams.yb ? Number(unresolvedSearchParams.yb) : undefined,
         sortField: unresolvedSearchParams.sortField as 'listingPrice' | 'listingDate' | undefined,
         sortDirection: unresolvedSearchParams.sortDirection as 'asc' | 'desc' | undefined,
+        searchQuery: unresolvedSearchParams.q as string | undefined,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
     }
@@ -51,15 +52,13 @@ export default async function ListingsPage({
     })
 
     if (view === 'map') {
-        // Map view: fast count + client-side pin fetching
-        const totalCount = await getListingCount(filters)
-
+        // Map view: skip server-side count — pins are fetched client-side
         return (
             <ListingsTermsGate>
                 <div className="bg-gray-50 min-h-screen pt-24 pb-16">
                     <div className="px-4 sm:px-6">
-                        <ListingSearch initialFilters={filterParams} totalCount={totalCount} />
-                        <MapView filterParams={filterParams} totalCount={totalCount} />
+                        <ListingSearch initialFilters={filterParams} />
+                        <MapView filterParams={filterParams} totalCount={0} />
                         <ListingDisclaimer lastUpdated={new Date().toLocaleDateString('en-CA')} />
                     </div>
                 </div>
