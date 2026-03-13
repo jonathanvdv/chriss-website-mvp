@@ -23,21 +23,24 @@ export default function AboutPage() {
                     sizes="100vw"
                     className="object-contain object-bottom saturate-[1.15]"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-brand-bg via-brand-bg/40 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-bg via-brand-bg/20 to-transparent"></div>
 
-                <div className="relative z-10 text-center px-4 flex-1 flex items-end justify-center w-full pb-16">
+                <div
+                    className="relative z-10 text-center px-4 flex items-end justify-center w-full"
+                    style={{ marginTop: 'auto', paddingBottom: '4px' }}
+                >
                     <h1 className="font-display text-5xl md:text-7xl text-brand-text">
                         Hi, I&apos;m <span className="italic text-brand-accent">Chris.</span>
                     </h1>
                 </div>
-
-                <div className="relative z-20 pb-8 mt-auto flex justify-center w-full">
-                    <ChevronDown className="w-8 h-8 text-brand-text animate-bounce" />
-                </div>
             </section>
 
+            <div className="flex justify-center py-12">
+                <ChevronDown className="w-8 h-8 text-brand-text animate-bounce" />
+            </div>
+
             {/* Story Section */}
-            <section className="py-24 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <section className="pb-24 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-16">
                     <p className="text-brand-accent text-xs font-semibold uppercase tracking-widest mb-6">My Story</p>
                     <h2 className="font-display text-4xl md:text-5xl text-brand-text mb-10 leading-tight">
