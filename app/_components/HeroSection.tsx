@@ -4,11 +4,11 @@ import { AnimatedSection } from '@/components/ui/AnimatedSection'
 
 export function HeroSection() {
     return (
-        <section className="relative w-full bg-white pt-[90px] lg:pt-[124px] overflow-hidden">
-            <div className="max-w-7xl 2xl:max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-12 2xl:px-20 w-full">
-                <div className="flex flex-col lg:flex-row items-end">
+        <section className="relative w-full bg-white pt-[80px] lg:pt-[90px] overflow-hidden lg:h-screen">
+            <div className="max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 w-full h-full">
+                <div className="flex flex-col lg:flex-row items-end h-full">
                     {/* Main Content Area */}
-                    <div className="w-full lg:w-1/2 flex flex-col z-10 lg:pr-8 pt-8 lg:pt-0 lg:pb-0 lg:justify-center lg:self-stretch">
+                    <div className="w-full lg:w-1/2 flex flex-col z-10 lg:pr-8 pt-4 lg:pt-14 lg:pb-0 lg:justify-start lg:self-stretch">
                         {/* Mobile: side-by-side heading + image */}
                         <div className="flex flex-row items-stretch lg:block w-full mb-6 lg:mb-0">
                             {/* Text */}
@@ -24,12 +24,14 @@ export function HeroSection() {
 
                                 <div className="text-brand-text-muted text-[13px] sm:text-sm lg:text-lg 2xl:text-xl leading-relaxed font-light text-pretty space-y-4 lg:space-y-5">
                                     <p>
-                                        I&apos;m Chris Pimentel. For 16 years, I&apos;ve helped families across the
-                                        Waterloo Region find homes they love and sell for prices they didn&apos;t
-                                        expect.
+                                        I&apos;m Chris Pimentel, a REALTOR® with RE/MAX Twin City. For 16 years,
+                                        I&apos;ve helped families across the Waterloo Region find homes they love and
+                                        sell for prices they didn&apos;t expect.
                                     </p>
                                     <p className="hidden lg:block">
-                                        New listings hit this site every day. The best ones don&apos;t last long.
+                                        New listings hit this site every day and the best ones move fast. Whether
+                                        you&apos;re buying your first home or selling to move up, I&apos;ll make sure
+                                        you never miss an opportunity.
                                     </p>
                                 </div>
                             </AnimatedSection>
@@ -44,7 +46,6 @@ export function HeroSection() {
                                     sizes="(max-width: 1024px) 40vw"
                                     className="object-contain object-bottom"
                                 />
-                                <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
                             </div>
                         </div>
 
@@ -74,8 +75,8 @@ export function HeroSection() {
                     </div>
 
                     {/* Desktop Image — large, bottom-aligned */}
-                    <div className="hidden lg:flex w-1/2 justify-center items-end relative">
-                        <div className="relative w-full max-w-[580px] 2xl:max-w-[660px] h-[85vh] min-h-[600px]">
+                    <div className="hidden lg:flex w-1/2 justify-center items-end relative h-full">
+                        <div className="relative w-full max-w-[580px] 2xl:max-w-[660px] h-[calc(100vh-90px)]">
                             <Image
                                 src="/images/chris3.png"
                                 alt="Chris Pimentel - Cambridge & Waterloo Region REALTOR"
@@ -85,8 +86,6 @@ export function HeroSection() {
                                 className="object-contain object-bottom"
                             />
                         </div>
-                        {/* Left fade */}
-                        <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-white to-transparent pointer-events-none"></div>
                     </div>
                 </div>
             </div>
